@@ -1,52 +1,16 @@
+import { BaseClientEdictHandler } from '../../../shared/ClientEdict.mjs';
 import Vector from '../../../shared/Vector.mjs';
 
-import { attn, channel, content, damage, dead, deathType, effect, flags, hull, items, moveType, solid } from '../Defs.mjs';
+import { attn, channel, clientEvent, colors, content, damage, dead, deathType, effect, flags, hull, items, moveType, solid } from '../Defs.mjs';
 import { crandom, Flag, Serializer } from '../helper/MiscHelpers.mjs';
 import BaseEntity from './BaseEntity.mjs';
 import { BackpackEntity } from './Items.mjs';
 import { BubbleSpawnerEntity, InfoNotNullEntity, IntermissionCameraEntity, TeleportEffectEntity } from './Misc.mjs';
-import { MeatSprayEntity } from './monster/BaseMonster.mjs';
+import BaseMonster, { MeatSprayEntity } from './monster/BaseMonster.mjs';
 import { Backpack, DamageHandler, PlayerWeapons, weaponConfig } from './Weapons.mjs';
 import { CopyToBodyQue } from './Worldspawn.mjs';
 
 /** @typedef {import('../../../shared/GameInterfaces').PlayerEntitySpawnParamsDynamic} PlayerEntitySpawnParamsDynamic */
-
-/**
- * used to emit effects etc. to the client
- * @enum {number}
- * @readonly
- */
-export const clientEvent = {
-  /** @deprecated */
-  BONUS_FLASH: 1,
-
-  /** @deprecated */
-  DAMAGE_FLASH: 2,
-
-  /** single stats slot updated, args: slot name (string), value (number) */
-  STATS_UPDATED: 3,
-
-  /** single stats slot initialized, args: slot name (string), value (number) */
-  STATS_INIT: 4,
-
-  /** an item has been picked up, args: itemEntity (ent), items (string[]), netname (string?), itemflags (number) */
-  ITEM_PICKED: 5,
-
-  /** weapon has been selected, args: weapon id (number) */
-  WEAPON_SELECTED: 6,
-
-  /** someone got killed, args: killing object (ent), killer (ent), victim (ent), weapon (number), items (number) */
-  OBITUARY: 7,
-
-  /** enters intermission, args: message (optional) */
-  INTERMISSION_START: 8,
-
-  /** TODO: damage received, args: damage (number), origin (vector) */
-  DAMAGE_RECEIVED: 99,
-
-  /** test event, args: some gargabe */
-  TEST_EVENT: 254,
-};
 
 export const qc = `
 
@@ -197,6 +161,30 @@ export class PlayerEntity extends BaseEntity {
     'health',
   ];
 
+  static clientEntityFields = [
+    'items',
+  ];
+
+  static clientEdictHandler = class PlayerClientEntity extends BaseClientEdictHandler {
+    emit() {
+      if (+this.clientEdict.extended.items & items.IT_QUAD) {
+        const dl = this.engine.AllocDlight(this.clientEdict.num);
+
+        dl.color = this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_QUAD);
+        dl.origin = this.clientEdict.origin.copy();
+        dl.radius = 295 + Math.random() * 5;
+        dl.die = this.engine.CL.time + 0.1;
+      } else if (+this.clientEdict.extended.items & items.IT_INVULNERABILITY) {
+        const dl = this.engine.AllocDlight(this.clientEdict.num);
+
+        dl.color = this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_INVULN);
+        dl.origin = this.clientEdict.origin.copy();
+        dl.radius = 295 + Math.random() * 5;
+        dl.die = this.engine.CL.time + 0.1;
+      }
+    }
+  };
+
   _declareFields() {
     /** @protected */
     this._weapons = new PlayerWeapons(this);
@@ -271,11 +259,11 @@ export class PlayerEntity extends BaseEntity {
     this.team = 0;
     this.frags = 0;
 
-    /** @type {string[]} client data fields, will be pushed to the client each frame when updated, use the name of the entity field, do NOT change the content during runtime */
+    /** @type {string[]} client data fields, will be pushed to the client each frame when updated, use the name of the entity field, do NOT change the content during runtime, also consider this client data private, it won’t be sent to other clients */
     this.clientdataFields = PlayerEntity.clientdataFields;
 
     // relevant for damage etc.
-    this.bloodcolor = 73; // FIXME: hardcoded color code (73)
+    this.bloodcolor = colors.BLOOD;
 
     /** @type {number} used for forced movement time (e.g. trigger_push) */
     this.fly_time = 0;
@@ -865,7 +853,7 @@ export class PlayerEntity extends BaseEntity {
     this.weapon = weapon;
     this.items &= ~(this.items & (items.IT_SHELLS | items.IT_NAILS | items.IT_ROCKETS | items.IT_CELLS));
 
-    const config = weaponConfig.get(this.weapon);
+    const config = weaponConfig.get(/** @type {import('./Weapons.mjs').WeaponConfigKey} */(this.weapon));
     if (config) {
       this.currentammo = config.ammoSlot ? this[config.ammoSlot] : 0;
       this.weaponmodel = config.viewModel;
@@ -888,8 +876,9 @@ export class PlayerEntity extends BaseEntity {
    * QuakeC: W_BestWeapon
    * @returns {number} weapon number
    */
-  chooseBestWeapon() {
+  chooseBestWeapon() { // FIXME: this seems to be off, constantly picks a different weapon than anticipated
     const it = this.items;
+    /** @type {import('./Weapons.mjs').WeaponConfigKey} */
     let bestWeapon = items.IT_AXE; // Default weapon
     let maxPriority = 0;
 
@@ -1034,6 +1023,7 @@ export class PlayerEntity extends BaseEntity {
         `frame = ${tracedEntity.frame}\n` +
         `nextthink (abs) = ${tracedEntity.nextthink}\n` +
         `nextthink (rel) = ${tracedEntity.nextthink - this.game.time}\n` +
+        // @ts-ignore: debugging purposes only
         `_stateCurrent = ${tracedEntity._stateCurrent}\n`);
       console.log('tracedEntity:', tracedEntity);
     }
@@ -1499,8 +1489,6 @@ export class PlayerEntity extends BaseEntity {
         this.invincible_finished = 0;
         this.invincible_sound_time = {};
       }
-
-      this.effects = this.invincible_finished > this.game.time ? this.effects | effect.EF_DIMLIGHT : this.effects & ~effect.EF_DIMLIGHT;
     }
 
     // Super Damage
@@ -1522,7 +1510,6 @@ export class PlayerEntity extends BaseEntity {
         this.super_damage_finished = 0;
         this.super_time = 0;
       }
-      this.effects = this.super_damage_finished > this.game.time ? this.effects | effect.EF_DIMLIGHT : this.effects & ~effect.EF_DIMLIGHT;
     }
 
     // Suit
@@ -1908,8 +1895,13 @@ export class PlayerEntity extends BaseEntity {
 
     // we actually move the player to the intermission spot, so that PVS checks and delta updates work correctly
     this.view_ofs.clear();
-    this.angles.set(spot.mangle || spot.angles);
-    this.v_angle.set(spot.mangle || spot.angles);
+    if (spot instanceof IntermissionCameraEntity) {
+      this.angles.set(spot.mangle || spot.angles);
+      this.v_angle.set(spot.mangle || spot.angles);
+    } else {
+      this.angles.set(spot.angles);
+      this.v_angle.set(spot.angles);
+    }
     this.fixangle = true;
     // nextthink in 500ms?
     this.takedamage = damage.DAMAGE_NO;
@@ -2059,7 +2051,7 @@ export class PlayerEntity extends BaseEntity {
     // determine the actual killer name by an easy logic
     const name = (() => {
       // let’s check if netname is holding something meaningful
-      if (actualAttacker.netname) {
+      if ('netname' in actualAttacker) {
         return actualAttacker.netname;
       }
 
@@ -2069,11 +2061,14 @@ export class PlayerEntity extends BaseEntity {
 
     this.engine.BroadcastPrint(`${name} killed ${this.netname}.\n`); // FIXME: ClientObituary needs to be more fun again
 
-    this.engine.BroadcastClientEvent(true, clientEvent.OBITUARY, this.edictId, actualAttacker.edictId, actualAttacker.weapon || 0, actualAttacker.items || 0);
-
     if (actualAttacker instanceof PlayerEntity) {
       // friendly fire subtracts a frag
       actualAttacker.frags += this.team > 0 && this.game.teamplay > 0 && actualAttacker.team === this.team ? -1 : 1;
+
+      this.engine.BroadcastClientEvent(true, clientEvent.OBITUARY, this.edictId, actualAttacker.edictId, actualAttacker.weapon || 0, actualAttacker.items || 0);
+    } else {
+      // IDEA: we could also check for monsters here and set the weapon accordingly
+      this.engine.BroadcastClientEvent(true, clientEvent.OBITUARY, this.edictId, actualAttacker.edictId, 0, 0);
     }
   }
 
@@ -2191,7 +2186,7 @@ export class TelefragTriggerEntity extends BaseEntity {
       }
     }
 
-    if (touchedByEntity.health > 0) {
+    if ('health' in touchedByEntity) { // probably can receive damage
       this.damage(touchedByEntity, 50000.0);
     }
   }
@@ -2230,7 +2225,7 @@ export class GibEntity extends BaseEntity {
 
   /**
    * Throws around a few giblets.
-   * @param {BaseEntity} entity the entity being gibbed
+   * @param {BaseMonster|PlayerEntity} entity the entity being gibbed
    * @param {?number} damage taken damage (negative)
    */
   static throwGibs(entity, damage = null) {
@@ -2248,7 +2243,7 @@ export class GibEntity extends BaseEntity {
 
   /**
    * Throws around a meat giblets.
-   * @param {BaseEntity} entity the entity being gibbed
+   * @param {BaseMonster|PlayerEntity} entity the entity being gibbed
    * @param {Vector} velocity velocity of the giblet
    * @param {?Vector} origin origin of the giblet, defaults to entity.origin
    */
@@ -2262,7 +2257,7 @@ export class GibEntity extends BaseEntity {
 
   /**
    * Turns entity into a head, will spawn random gibs.
-   * @param {BaseEntity} entity entity to be gibbed
+   * @param {BaseMonster|PlayerEntity} entity entity to be gibbed
    * @param {string} headModel e.g. progs/h_player.mdl
    * @param {?boolean} playSound plays gibbing sounds, if true
    */

@@ -128,13 +128,28 @@ export const tentType = Object.freeze({
 /**
  * @readonly
  * @enum {number}
- * color codes for blood and gore, should match palette.lmp colors
+ * indexed color for blood and gore, should match palette.lmp colors
  */
 export const colors = Object.freeze({
   DUST: 0,
   BLOOD: 73,
   FIRE: 75,
   SPARK: 225,
+
+  HUD_AMMO_NORMAL: 240,
+  HUD_AMMO_WARNING: 250,
+
+  HUD_CSHIFT_BONUSFLASH: 192,
+  HUD_CSHIFT_DAMAGE: 193,
+  HUD_CSHIFT_SECRET: 128,
+
+  HUD_CSHIFT_POWERUP_QUAD: 208,
+  HUD_CSHIFT_POWERUP_INVULN: 250,
+  HUD_CSHIFT_POWERUP_SUIT: 192,
+  HUD_CSHIFT_POWERUP_INVIS: 15,
+
+  HUD_RANKING_TEXT: 240,
+  HUD_RANKING_BACKGROUND: 16,
 });
 
 /**
@@ -147,6 +162,43 @@ export const spawnflags = Object.freeze({
   SPAWNFLAG_NOT_HARD: 1024,
   SPAWNFLAG_NOT_DEATHMATCH: 2048,
 });
+
+/**
+ * used to emit effects etc. to the client
+ * @enum {number}
+ * @readonly
+ */
+export const clientEvent = {
+  /** @deprecated */
+  BONUS_FLASH: 1,
+
+  /** @deprecated */
+  DAMAGE_FLASH: 2,
+
+  /** single stats slot updated, args: slot name (string), value (number) */
+  STATS_UPDATED: 3,
+
+  /** single stats slot initialized, args: slot name (string), value (number) */
+  STATS_INIT: 4,
+
+  /** an item has been picked up, args: itemEntity (ent), items (string[]), netname (string?), itemflags (number) */
+  ITEM_PICKED: 5,
+
+  /** weapon has been selected, args: weapon id (number) */
+  WEAPON_SELECTED: 6,
+
+  /** someone got killed, args: killing object (ent), killer (ent), victim (ent), weapon (number), items (number) */
+  OBITUARY: 7,
+
+  /** enters intermission, args: message (optional) */
+  INTERMISSION_START: 8,
+
+  /** TODO: damage received, args: damage (number), origin (vector) */
+  DAMAGE_RECEIVED: 99,
+
+  /** test event, args: some gargabe */
+  TEST_EVENT: 254,
+};
 
 /**
  * @param {number} eventId event id from clientEvent

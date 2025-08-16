@@ -1,7 +1,6 @@
 import Q from '../../../shared/Q.mjs';
 import Vector from '../../../shared/Vector.mjs';
-import { clientEventName, contentShift, items } from '../Defs.mjs';
-import { clientEvent } from '../entity/Player.mjs';
+import { clientEvent, clientEventName, colors, contentShift, items } from '../Defs.mjs';
 import { weaponConfig } from '../entity/Weapons.mjs';
 import { ClientGameAPI } from './ClientAPI.mjs';
 
@@ -266,8 +265,8 @@ export default class HUD {
     // observe notable events
     this.#subscribeToEvents();
 
-    ammoColor.set(this.engine.IndexToRGB(127));
-    ammoLowColor.set(this.engine.IndexToRGB(250));
+    ammoColor.set(this.engine.IndexToRGB(colors.HUD_AMMO_NORMAL));
+    ammoLowColor.set(this.engine.IndexToRGB(colors.HUD_AMMO_WARNING));
   }
 
   shutdown() {
@@ -312,12 +311,12 @@ export default class HUD {
       // TODO: do the picked up animation effect
       console.debug(`Picked up item: ${itemEntity.classname} (items = ${items})`);
 
-      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(111), 0.2);
+      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
     });
 
     // still used for some fading item effects
     this.engine.eventBus.subscribe(clientEventName(clientEvent.BONUS_FLASH), () => {
-      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(111), 0.2);
+      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
     });
 
     // game stats base value
@@ -332,7 +331,7 @@ export default class HUD {
       this.stats[slot] = value;
 
       if (slot === 'secrets_found') {
-        this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(128), 0.2);
+        this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_SECRET), 0.2);
       }
     });
 
@@ -453,7 +452,7 @@ export default class HUD {
   }
 
   #drawScoreboard() {
-    const secondaryColor = this.engine.IndexToRGB(240);
+    const secondaryColor = this.engine.IndexToRGB(colors.HUD_RANKING_TEXT);
 
     this.overlay.drawPic(this.overlay.width - labels.ranking.width, 32, labels.ranking);
     this.overlay.drawString((labels.ranking.height - 16) / 2, 32, this.game.serverInfo.hostname, 2.0, secondaryColor);
@@ -473,7 +472,7 @@ export default class HUD {
 
     scores.sort((a, b) => b.frags - a.frags);
 
-    this.overlay.drawBorderedRect(x, y, this.overlay.width, this.overlay.height - 88, this.engine.IndexToRGB(16), 0.66);
+    this.overlay.drawBorderedRect(x, y, this.overlay.width, this.overlay.height - 88, this.engine.IndexToRGB(colors.HUD_RANKING_BACKGROUND), 0.66);
 
     for (let i = 0; i < scores.length; i++) {
       const score = scores[i];
@@ -575,17 +574,17 @@ export default class HUD {
 
     switch (true) {
       case (this.game.clientdata.items & items.IT_QUAD) !== 0:
-        color.set(this.engine.IndexToRGB(208));
+        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_QUAD));
         break;
       case (this.game.clientdata.items & items.IT_INVULNERABILITY) !== 0:
-        color.set(this.engine.IndexToRGB(250));
+        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_INVULN));
         break;
       case (this.game.clientdata.items & items.IT_SUIT) !== 0:
-        color.set(this.engine.IndexToRGB(192));
+        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_SUIT));
         isFlickering = false; // no flickering for suit
         break;
       case (this.game.clientdata.items & items.IT_INVISIBILITY) !== 0:
-        color.set(this.engine.IndexToRGB(15));
+        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_INVIS));
         break;
     }
 
@@ -593,7 +592,7 @@ export default class HUD {
       return;
     }
 
-    this.engine.ContentShift(contentShift.powerup, color, isFlickering ? 0.01 + Math.random() * 0.1 : this.engine.CL.frametime * 10.0);
+    this.engine.ContentShift(contentShift.powerup, color, isFlickering ? 0.25 + Math.random() * 0.1 : 0.3);
   }
 
   startFrame() {

@@ -1,3 +1,4 @@
+import { BaseClientEdictHandler } from '../../../shared/ClientEdict.mjs';
 import Vector from '../../../shared/Vector.mjs';
 
 import { attn, channel, colors, content, damage, effect, moveType, solid, tentType } from '../Defs.mjs';
@@ -272,6 +273,20 @@ export class WhiteSmallFlameLightEntity extends TorchLightEntity {
 
 export class FireballEntity extends BaseEntity {
   static classname = 'misc_fireball_fireball';
+
+  static clientEdictHandler = class FireballEdictHandler extends BaseClientEdictHandler {
+    emit() {
+      const dl = this.engine.AllocDlight(this.clientEdict.num);
+
+      dl.color = this.engine.IndexToRGB(colors.FIRE);
+      dl.origin = this.clientEdict.origin.copy();
+      dl.radius = 285 + Math.random() * 15;
+      dl.die = this.engine.CL.time + 0.1;
+
+      this.engine.RocketTrail(this.clientEdict.originPrevious, this.clientEdict.origin, 1);
+      this.engine.RocketTrail(this.clientEdict.originPrevious, this.clientEdict.origin, 6);
+    }
+  };
 
   _declareFields() {
     this._serializer.startFields();
@@ -792,7 +807,7 @@ export class BubbleSpawnerEntity extends BaseEntity {
     console.assert(bubbles < 50, 'bubble() requires a number of bubbles less than 50');
 
     return /** @type {BubbleSpawnerEntity} */(entity.engine.SpawnEntity(BubbleSpawnerEntity.classname, {
-      origin: entity.origin.copy().add(entity.view_ofs || Vector.origin),
+      origin: entity.origin.copy().add('view_ofs' in entity && entity.view_ofs instanceof Vector ? entity.view_ofs : Vector.origin),
       bubble_count: bubbles,
       spread: 5,
     }));
