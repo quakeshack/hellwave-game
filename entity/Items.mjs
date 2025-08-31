@@ -49,6 +49,10 @@ export class BaseItemEntity extends BaseEntity {
   _declareFields() {
     this._serializer.startFields();
 
+    /** we abuse this field to make it untouchable for a second */
+    this.pain_finished = 0;
+
+    this.money = 0;
     this.ammo_shells = 0;
     this.ammo_nails = 0;
     this.ammo_rockets = 0;
@@ -110,6 +114,10 @@ export class BaseItemEntity extends BaseEntity {
 
   /** @param {BaseEntity} otherEntity other */
   touch(otherEntity) {
+    if (this.pain_finished > this.game.time) { // too quick pickup protection
+      return;
+    }
+
     if (!(otherEntity instanceof PlayerEntity) || otherEntity.health <= 0 || !this._canPickup(otherEntity)) {
       return;
     }
@@ -142,6 +150,10 @@ export class BaseItemEntity extends BaseEntity {
 
     if (this.ammo_cells > 0) {
       items.push(`${this.ammo_cells} cells`);
+    }
+
+    if (this.money > 0) {
+      items.push(`Q${this.money.toFixed(0)}`);
     }
 
     // let the player consume this backpack

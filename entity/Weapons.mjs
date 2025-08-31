@@ -51,6 +51,7 @@ export class Backpack {
   ammo_cells = 0;
   items = 0;
   weapon = 0;
+  money = 0;
 };
 
 export class Explosions extends EntityWrapper {

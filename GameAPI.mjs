@@ -1,7 +1,7 @@
 
 import { GibEntity, InfoPlayerStart, InfoPlayerStartCoop, InfoPlayerStartDeathmatch, PlayerEntity, qc as playerModelQC, TelefragTriggerEntity } from './entity/Player.mjs';
 import { BodyqueEntity, WorldspawnEntity } from './entity/Worldspawn.mjs';
-import { clientEvent, spawnflags } from './Defs.mjs';
+import { clientEvent, hull, spawnflags } from './Defs.mjs';
 import * as misc from './entity/Misc.mjs';
 import * as door from './entity/props/Doors.mjs';
 import * as platform from './entity/props/Platforms.mjs';
@@ -23,6 +23,9 @@ import OgreMonsterEntity, { qc as ogreModelQC } from './entity/monster/Ogre.mjs'
 import ShalrathMonsterEntity, { ShalrathMissileEntity, qc as shalrathModelQC } from './entity/monster/Shalrath.mjs';
 import ShamblerMonsterEntity, { qc as shamblerModelQC } from './entity/monster/Shambler.mjs';
 import TarbabyMonsterEntity, { qc as tbabyModelQC } from './entity/monster/Tarbaby.mjs';
+import * as zones from './entity/hellwave/Zones.mjs';
+import Vector from '../../shared/Vector.mjs';
+import GameManager from './GameManager.mjs';
 
 /** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
 /** @typedef {import("../../engine/common/Cvar.mjs").default} Cvar */
@@ -169,6 +172,12 @@ export const entityRegistry = new Map([
   item.WeaponSuperNailgun,
   item.WeaponRocketLauncher,
   item.WeaponThunderbolt,
+
+  zones.BuyZoneEntity,
+  zones.MonstersSpawnZoneEntity,
+  zones.PlayersSpawnZoneEntity,
+  zones.SpawnClearanceEntity,
+  zones.BuyZoneShuttersEntity,
 ].map((entityClass) => [
   /** @type {string} */(entityClass.classname),
   /** @type {typeof BaseEntity} */(entityClass),
@@ -187,6 +196,8 @@ const cvars = {
   skill: null,
   deathmatch: null,
   coop: null,
+
+  rounds: null,
 };
 
 /**
@@ -216,6 +227,10 @@ class GameStats {
     this.monsters_killed = 0;
     this.secrets_total = 0;
     this.secrets_found = 0;
+    this.round_current = 0;
+    this.round_total = cvars.rounds.value;
+    this.squad_standing = 0;
+    this.squad_total = 0;
   }
 
   subscribeToEvents() {
@@ -224,10 +239,25 @@ class GameStats {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_found', ++this.secrets_found, finderEntity.edict);
     });
 
-    this.engine.eventBus.subscribe('game.monster.spawned', () => { this.monsters_total++; });
+    this.engine.eventBus.subscribe('game.monster.spawned', () => {
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', ++this.monsters_total);
+    });
+
     this.engine.eventBus.subscribe('game.monster.killed', (monsterEntity, attackerEntity) => {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', ++this.monsters_killed, attackerEntity.edict);
     });
+  }
+
+  updateSquadStats(squadStanding, squadTotal) {
+    if (this.squad_standing !== squadStanding) {
+      this.squad_standing = squadStanding;
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_standing', this.squad_standing);
+    }
+
+    if (this.squad_total !== squadTotal) {
+      this.squad_total = squadTotal;
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_total', this.squad_total);
+    }
   }
 
   /**
@@ -238,6 +268,10 @@ class GameStats {
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'monsters_killed', this.monsters_killed);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'secrets_total', this.secrets_total);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'secrets_found', this.secrets_found);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_total', this.round_total);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_current', this.round_current);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_standing', this.squad_standing);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_total', this.squad_total);
   }
 };
 
@@ -301,6 +335,8 @@ export class ServerGameAPI {
     this.intermission_exittime = 0.0;
     /** @type {?string} next map name */
     this.nextmap = null;
+
+    this.manager = new GameManager(this);
 
     this._serializer.endFields();
 
@@ -390,6 +426,8 @@ export class ServerGameAPI {
 
   startFrame() {
     this.framecount++;
+
+    this.manager.startFrame();
   }
 
   PlayerPreThink(clientEdict) {
@@ -405,11 +443,15 @@ export class ServerGameAPI {
   ClientConnect(clientEdict) {
     const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
     playerEntity.connected();
+
+    this.manager.clientConnected(playerEntity);
   }
 
   ClientDisconnect(clientEdict) {
     const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
     playerEntity.disconnected();
+
+    this.manager.clientDisconnected(playerEntity);
   }
 
   ClientKill(clientEdict) {
@@ -582,6 +624,9 @@ export class ServerGameAPI {
     cvars.skill = ServerEngineAPI.RegisterCvar('skill', '1');
     cvars.deathmatch = ServerEngineAPI.RegisterCvar('deathmatch', '0');
     cvars.coop = ServerEngineAPI.RegisterCvar('coop', '0');
+
+    // hellwave specific cvars
+    cvars.rounds = ServerEngineAPI.RegisterCvar('rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
 
     // initialize all entity classes
     for (const entityClass of entityRegistry.values()) {

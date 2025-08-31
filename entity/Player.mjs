@@ -163,6 +163,8 @@ export class PlayerEntity extends BaseEntity {
 
   static clientEntityFields = [
     'items',
+    'money',
+    'health',
   ];
 
   static clientEdictHandler = class PlayerClientEntity extends BaseClientEdictHandler {
@@ -258,6 +260,7 @@ export class PlayerEntity extends BaseEntity {
     this.colormap = 0;
     this.team = 0;
     this.frags = 0;
+    this.money = 0;
 
     /** @type {string[]} client data fields, will be pushed to the client each frame when updated, use the name of the entity field, do NOT change the content during runtime, also consider this client data private, it won’t be sent to other clients */
     this.clientdataFields = PlayerEntity.clientdataFields;
@@ -652,6 +655,7 @@ export class PlayerEntity extends BaseEntity {
       ammo_nails: this.ammo_nails,
       ammo_rockets: this.ammo_rockets,
       ammo_shells: this.ammo_shells,
+      money: this.money, // Balancing: should we really drop money or only a little?
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
     }));
@@ -660,10 +664,30 @@ export class PlayerEntity extends BaseEntity {
     this.ammo_nails = 0;
     this.ammo_rockets = 0;
     this.ammo_shells = 0;
+    this.money = 0;
     this.items &= ~this.weapon | items.IT_AXE;
 
     // toss it around
     backpack.toss();
+  }
+
+  _dropMoney() {
+    if (this.money < 100) {
+      return; // not enough money to drop
+    }
+
+    const { forward } = this.angles.angleVectors();
+
+    const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
+      origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)).add(forward.multiply(64.0)),
+      angles: this.angles.copy(),
+      money: 100,
+      regeneration_time: 0, // do not regenerate
+      remove_after: 120, // remove after 120s
+      pain_finished: this.game.time + 0.5, // make it untouchable for a split second
+    }));
+
+    this.updateMoney(-backpack.money);
   }
 
   /** @protected */
@@ -955,6 +979,11 @@ export class PlayerEntity extends BaseEntity {
       this.setWeapon(this.chooseBestWeapon());
     }
 
+    if (backpack.money > 0) {
+      this.updateMoney(backpack.money);
+      backpackUsed = true;
+    }
+
     return backpackUsed;
   }
 
@@ -1076,6 +1105,7 @@ export class PlayerEntity extends BaseEntity {
       ammo_nails: 100,
       ammo_shells: 50,
       ammo_cells: 100,
+      money: 10000,
     });
 
     this.dispatchEvent(clientEvent.BONUS_FLASH);
@@ -1263,6 +1293,10 @@ export class PlayerEntity extends BaseEntity {
 
         case 255:
           this._cheatCommandQuad();
+          break;
+
+        case 20:
+          this._dropMoney();
           break;
 
         default:
@@ -1600,6 +1634,11 @@ export class PlayerEntity extends BaseEntity {
     this.setWeapon();
   }
 
+  updateMoney(difference = 0) {
+    this.money += difference;
+    this.dispatchEvent(clientEvent.MONEY_UPDATE, this.money);
+  }
+
   /**
    * called by PutClientInServer
    */
@@ -1612,6 +1651,7 @@ export class PlayerEntity extends BaseEntity {
 
     // update client on stats
     this.game.stats.sendToPlayer(this);
+    this.updateMoney();
 
     this._enterStandingState();
 
@@ -2102,6 +2142,7 @@ export class PlayerEntity extends BaseEntity {
     // make sure the player gets a clean player, including no score (frags, etc.)
     this.clear();
     this.frags = 0;
+    this.money = 1000;
 
     // a client connecting during an intermission can cause problems
     if (this.game.intermission_running) {

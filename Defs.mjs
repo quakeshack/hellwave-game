@@ -196,6 +196,15 @@ export const clientEvent = {
   /** TODO: damage received, args: damage (number), origin (vector) */
   DAMAGE_RECEIVED: 99,
 
+  /** change to the money, args: current balance (number) */
+  MONEY_UPDATE: 200,
+
+  /** update on round time, args: seconds of time remaining (number) */
+  ROUND_TIME: 201,
+
+  /** update  */
+  ROUND_PHASE: 202,
+
   /** test event, args: some gargabe */
   TEST_EVENT: 254,
 };

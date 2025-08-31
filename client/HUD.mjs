@@ -217,6 +217,15 @@ export default class HUD {
     monsters_killed: 0,
     secrets_total: 0,
     secrets_found: 0,
+    round_total: 0,
+    round_current: 0,
+    squad_total: 0,
+    squad_standing: 0,
+  };
+
+  inventory = {
+    /** @type {number[]} current account balance */
+    money: [null, null, -Infinity],
   };
 
   /** damage related states */
@@ -344,6 +353,10 @@ export default class HUD {
       this.engine.CL.intermission = true;
 
       console.debug('Intermission started:', this.intermission.message, 'origin: ' + origin, 'angles:' + angles);
+    });
+
+    this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance) => {
+      this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.time];
     });
   }
 
@@ -476,10 +489,12 @@ export default class HUD {
 
     for (let i = 0; i < scores.length; i++) {
       const score = scores[i];
+      // const money = +score.entity.extended.money || 0;
+      const health = Math.max(0, +score.entity.extended.health || 0);
 
       this.overlay.drawRect(x + 8, y + 24 * i + 8, 80, 8, this.engine.IndexToRGB((score.colors & 0xf0) + 8));
       this.overlay.drawRect(x + 8, y + 24 * i + 16, 80, 8, this.engine.IndexToRGB((score.colors & 0xf) * 16 + 8));
-      this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(25)} ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
+      this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} ${`${health.toFixed(0)} HP`.padStart(5)} ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
     }
 
     y += this.overlay.height - 88;
@@ -538,6 +553,31 @@ export default class HUD {
     this.sbar.drawString(8, offsetY + 12, `${secrets.padEnd(19)} ${new String(this.engine.CL.levelname).trim().padStart(18)}`.substring(0, 38));
   }
 
+  #drawAccountBalance() {
+    if (this.inventory.money === null) {
+      return; // no money to display
+    }
+
+    const color = new Vector(1.0, 1.0, 1.0);
+
+    if (this.inventory.money[0] !== null) {
+      const newBalance = this.inventory.money[0] || 0;
+      const oldBalance = this.inventory.money[1] || 0;
+      const colorComponent = Math.min(1.0, Math.max(0.0, (this.engine.CL.time - this.inventory.money[2]) / 3.0));
+      if (newBalance > oldBalance) {
+        color[0] = color[2] = colorComponent;
+      } else if (newBalance < oldBalance) {
+        color[1] = color[2] = colorComponent;
+      }
+      this.sbar.drawString(0, -48, `Q${newBalance}`, 2.0, color);
+    }
+  }
+
+  #drawRoundStats() {
+    const string = `${this.stats.round_current} / ${this.stats.round_total}`;
+    this.sbar.drawString(this.sbar.width - string.length * 16, -48, string, 2.0);
+  }
+
   draw() {
     if (this.intermission.running) {
       if (this.engine.CL.maxclients > 1) {
@@ -565,6 +605,9 @@ export default class HUD {
     }
 
     this.#drawStatusBar();
+
+    this.#drawAccountBalance();
+    this.#drawRoundStats();
   }
 
   #powerupFlash() {
