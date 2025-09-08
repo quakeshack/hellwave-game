@@ -1,10 +1,10 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { moveType, solid } from '../../Defs.mjs';
 import BaseEntity from '../BaseEntity.mjs';
-import { BaseLightEntity, DebugMarkerEntity, LightEntity } from '../Misc.mjs';
-import BaseMonster from '../monster/BaseMonster.mjs';
-import { PlayerEntity, TelefragTriggerEntity } from '../Player.mjs';
+import { DebugMarkerEntity, LightEntity } from '../Misc.mjs';
+import { PlayerEntity } from '../Player.mjs';
 import { BaseTriggerEntity } from '../Triggers.mjs';
+import { WallEntity } from './Props.mjs';
 
 /**
  * QUAKED func_buyzone (0.5 0 0.5) ?
@@ -116,36 +116,8 @@ export class BuyZoneEntity extends BaseTriggerEntity {
  * QUAKED func_buyzone_shutters (0.5 0 0.5) ?
  * Buyzone shutters. Will close when the round starts.
  */
-export class BuyZoneShuttersEntity extends BaseEntity {
+export class BuyZoneShuttersEntity extends WallEntity {
   static classname = 'func_buyzone_shutters';
-
-  _declareFields() {
-    super._declareFields();
-
-    this._serializer.startFields();
-    this._shownModel = null;
-    this._serializer.endFields();
-  }
-
-  spawn() {
-    this._shownModel = this.model;
-
-    this.hide();
-  }
-
-  show() {
-    this.solid = solid.SOLID_BSP;
-    this.movetype = moveType.MOVETYPE_PUSH;
-
-    this.setModel(this._shownModel);
-  }
-
-  hide() {
-    this.solid = solid.SOLID_NOT;
-    this.movetype = moveType.MOVETYPE_NONE;
-
-    this.unsetModel();
-  }
 };
 
 /**
@@ -216,22 +188,5 @@ export class PlayersSpawnZoneEntity extends BaseEntity {
     }
 
     console.assert(this.spawnpoints.length >= this.engine.maxplayers, 'have at least maxplayers spawnpoints');
-  }
-};
-
-/** @deprecated no longer required */
-export class  SpawnClearanceEntity extends TelefragTriggerEntity {
-  static classname = 'misc_spawn_clearance';
-
-  touch(touchedByEntity) {
-    if (touchedByEntity.equals(this.owner)) {
-      return;
-    }
-
-    if (!(touchedByEntity instanceof BaseMonster)) {
-      return;
-    }
-
-    touchedByEntity.lazyRemove();
   }
 };

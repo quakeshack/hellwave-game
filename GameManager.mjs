@@ -100,6 +100,7 @@ export default class GameManager {
   /**
    * @param {PlayerEntity} playerEntity player
    */
+  // eslint-disable-next-line no-unused-vars
   clientConnected(playerEntity) {
     // TODO:
     // - during quiet phase, spawn at a random spawn point

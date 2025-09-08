@@ -1,7 +1,7 @@
 
 import { GibEntity, InfoPlayerStart, InfoPlayerStartCoop, InfoPlayerStartDeathmatch, PlayerEntity, qc as playerModelQC, TelefragTriggerEntity } from './entity/Player.mjs';
 import { BodyqueEntity, WorldspawnEntity } from './entity/Worldspawn.mjs';
-import { clientEvent, hull, spawnflags } from './Defs.mjs';
+import { clientEvent, spawnflags } from './Defs.mjs';
 import * as misc from './entity/Misc.mjs';
 import * as door from './entity/props/Doors.mjs';
 import * as platform from './entity/props/Platforms.mjs';
@@ -24,8 +24,8 @@ import ShalrathMonsterEntity, { ShalrathMissileEntity, qc as shalrathModelQC } f
 import ShamblerMonsterEntity, { qc as shamblerModelQC } from './entity/monster/Shambler.mjs';
 import TarbabyMonsterEntity, { qc as tbabyModelQC } from './entity/monster/Tarbaby.mjs';
 import * as zones from './entity/hellwave/Zones.mjs';
-import Vector from '../../shared/Vector.mjs';
 import GameManager from './GameManager.mjs';
+import * as hwProps from './entity/hellwave/Props.mjs';
 
 /** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
 /** @typedef {import("../../engine/common/Cvar.mjs").default} Cvar */
@@ -82,7 +82,7 @@ export const entityRegistry = new Map([
   misc.AmbientSwamp1,
   misc.AmbientSwamp2,
 
-  misc.WallEntity,
+  hwProps.WallEntity,
   misc.IllusionaryWallEntity,
   misc.EpisodegateWallEntity,
   misc.BossgateWallEntity,
@@ -176,7 +176,6 @@ export const entityRegistry = new Map([
   zones.BuyZoneEntity,
   zones.MonstersSpawnZoneEntity,
   zones.PlayersSpawnZoneEntity,
-  zones.SpawnClearanceEntity,
   zones.BuyZoneShuttersEntity,
 ].map((entityClass) => [
   /** @type {string} */(entityClass.classname),
