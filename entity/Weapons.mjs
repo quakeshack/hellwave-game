@@ -363,6 +363,8 @@ export class DamageHandler extends EntityWrapper {
     this._entity.takedamage = damage.DAMAGE_NO;
     // FIXME: this._entity.touch = SUB_Null; -- we need to solve this differently?
 
+    // CR: the original QuakeC would call monster_death_use, but we have all thinkDie invoking useTargets anyway
+
     this._entity.resetThinking();
     this._entity.thinkDie(attackerEntity);
   }

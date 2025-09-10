@@ -23,6 +23,8 @@ import OgreMonsterEntity, { qc as ogreModelQC } from './entity/monster/Ogre.mjs'
 import ShalrathMonsterEntity, { ShalrathMissileEntity, qc as shalrathModelQC } from './entity/monster/Shalrath.mjs';
 import ShamblerMonsterEntity, { qc as shamblerModelQC } from './entity/monster/Shambler.mjs';
 import TarbabyMonsterEntity, { qc as tbabyModelQC } from './entity/monster/Tarbaby.mjs';
+import FishMonsterEntity, { qc as fishQC } from './entity/monster/Fish.mjs';
+
 import * as zones from './entity/hellwave/Zones.mjs';
 import GameManager from './GameManager.mjs';
 import * as hwProps from './entity/hellwave/Props.mjs';
@@ -131,6 +133,7 @@ export const entityRegistry = new Map([
   ArmyEnforcerMonster,
   ShamblerMonsterEntity,
   TarbabyMonsterEntity,
+  FishMonsterEntity,
 
   door.DoorEntity,
   door.SecretDoorEntity,
@@ -344,7 +347,8 @@ export class ServerGameAPI {
     /** @type {?BodyqueEntity} holds the dead player body chain */
     this.bodyque_head = null;
 
-    this._modelData = { // FIXME: I’m not happy about this, this needs to be next to models
+    /** @type {Record<string, import('../../shared/GameInterfaces').ParsedQC>} */
+    this._modelData = { // FIXME: I’m not happy about this, this needs to be next to models, I should put QC inside the entity classes and make them wire up there, it’s also only relevant for the state machine
       'progs/soldier.mdl': engineAPI.ParseQC(soldierModelQCs.solider),
       'progs/enforcer.mdl': engineAPI.ParseQC(soldierModelQCs.enforcer),
       'progs/player.mdl': engineAPI.ParseQC(playerModelQC),
@@ -357,13 +361,14 @@ export class ServerGameAPI {
       'progs/shalrath.mdl': engineAPI.ParseQC(shalrathModelQC),
       'progs/shambler.mdl': engineAPI.ParseQC(shamblerModelQC),
       'progs/tarbaby.mdl': engineAPI.ParseQC(tbabyModelQC),
+      'progs/fish.mdl': engineAPI.ParseQC(fishQC),
     };
 
     /** @private */
     this._missingEntityClassStats = {};
 
     // FIXME: I’m not happy about this structure, especially with the getters down below
-    /** cvar cache @type {{[key: string]: Cvar}} @private */
+    /** cvar cache @type {Record<string, Cvar>} @private */
     this._cvars = {
       teamplay: engineAPI.GetCvar('teamplay'),
       registered: engineAPI.GetCvar('registered'),
