@@ -28,6 +28,7 @@ import FishMonsterEntity, { qc as fishQC } from './entity/monster/Fish.mjs';
 import * as zones from './entity/hellwave/Zones.mjs';
 import GameManager from './GameManager.mjs';
 import * as hwProps from './entity/hellwave/Props.mjs';
+import HellwavePayer from './entity/hellwave/Player.mjs';
 
 /** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
 /** @typedef {import("../../engine/common/Cvar.mjs").default} Cvar */
@@ -40,7 +41,7 @@ const featureFlags = [
 export const entityRegistry = new Map([
   WorldspawnEntity,
   BodyqueEntity,
-  PlayerEntity,
+  HellwavePayer,
 
   misc.NullEntity,
   misc.InfoNotNullEntity,
@@ -640,7 +641,7 @@ export class ServerGameAPI {
 
   static Shutdown() {
     // free all cvars
-    for (const [key, cvar] of Object.entries(cvars).filter(cvar => cvar !== null)) {
+    for (const [key, cvar] of Object.entries(cvars).filter((cvar) => cvar !== null)) {
       cvar.free();
       cvars[key] = null;
     }

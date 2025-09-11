@@ -144,7 +144,7 @@ export class InfoPlayerStartCoop extends InfoNotNullEntity {
   static classname = 'info_player_coop';
 };
 
-/** @mixes {PlayerEntitySpawnParamsDynamic} */
+/** @mixes PlayerEntitySpawnParamsDynamic */
 export class PlayerEntity extends BaseEntity {
   static classname = 'player';
 
@@ -163,8 +163,6 @@ export class PlayerEntity extends BaseEntity {
 
   static clientEntityFields = [
     'items',
-    'money',
-    'health',
   ];
 
   static clientEdictHandler = class PlayerClientEntity extends BaseClientEdictHandler {
@@ -260,7 +258,6 @@ export class PlayerEntity extends BaseEntity {
     this.colormap = 0;
     this.team = 0;
     this.frags = 0;
-    this.money = 0;
 
     /** @type {string[]} client data fields, will be pushed to the client each frame when updated, use the name of the entity field, do NOT change the content during runtime, also consider this client data private, it won’t be sent to other clients */
     this.clientdataFields = PlayerEntity.clientdataFields;
@@ -655,7 +652,6 @@ export class PlayerEntity extends BaseEntity {
       ammo_nails: this.ammo_nails,
       ammo_rockets: this.ammo_rockets,
       ammo_shells: this.ammo_shells,
-      money: this.money, // Balancing: should we really drop money or only a little?
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
     }));
@@ -664,30 +660,10 @@ export class PlayerEntity extends BaseEntity {
     this.ammo_nails = 0;
     this.ammo_rockets = 0;
     this.ammo_shells = 0;
-    this.money = 0;
     this.items &= ~this.weapon | items.IT_AXE;
 
     // toss it around
     backpack.toss();
-  }
-
-  _dropMoney() {
-    if (this.money < 100) {
-      return; // not enough money to drop
-    }
-
-    const { forward } = this.angles.angleVectors();
-
-    const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
-      origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)).add(forward.multiply(64.0)),
-      angles: this.angles.copy(),
-      money: 100,
-      regeneration_time: 0, // do not regenerate
-      remove_after: 120, // remove after 120s
-      pain_finished: this.game.time + 0.5, // make it untouchable for a split second
-    }));
-
-    this.updateMoney(-backpack.money);
   }
 
   /** @protected */
@@ -796,8 +772,9 @@ export class PlayerEntity extends BaseEntity {
   /**
    * This is where fresh spawn parameters are set.
    * Essentially it sets the initial weapon, some ammo etc.
+   * @protected
    */
-  #freshSpawnParameters() {
+  _freshSpawnParameters() {
     this.items = items.IT_SHOTGUN | items.IT_AXE;
     this.health = 100;
     this.armorvalue = 0;
@@ -805,13 +782,13 @@ export class PlayerEntity extends BaseEntity {
     this.ammo_nails = 0;
     this.ammo_rockets = 0;
     this.ammo_cells = 0;
-    this.weapon = 1;
+    this.weapon = items.IT_SHOTGUN;
     this.armortype = 0;
   }
 
   saveSpawnParameters() {
     if (this.health <= 0) {
-      this.#freshSpawnParameters();
+      this._freshSpawnParameters();
     }
 
     this._spawnParameters = JSON.stringify([
@@ -837,18 +814,19 @@ export class PlayerEntity extends BaseEntity {
   /**
    * This sets the spawn parameters from the saved data or freshly initializes them.
    * Essentially it gives the initial weapon, some ammo etc.
+   * @protected
    */
-  #applySpawnParameters() {
+  _applySpawnParameters() {
     if (this.game.serverflags) { // player arrived via changelevel carrying serverflags
       // HACK: maps/start.bsp
       if (this.game.worldspawn.model === 'maps/start.bsp') { // start map will always reset the parms
-        this.#freshSpawnParameters();
+        this._freshSpawnParameters();
         return;
       }
     }
 
     if (!this._spawnParameters) {
-      this.#freshSpawnParameters();
+      this._freshSpawnParameters();
       return;
     }
 
@@ -977,11 +955,6 @@ export class PlayerEntity extends BaseEntity {
       items.IT_LIGHTNING
     ))) {
       this.setWeapon(this.chooseBestWeapon());
-    }
-
-    if (backpack.money > 0) {
-      this.updateMoney(backpack.money);
-      backpackUsed = true;
     }
 
     return backpackUsed;
@@ -1249,7 +1222,7 @@ export class PlayerEntity extends BaseEntity {
 
   /**
    * handles impulse commands
-   * @private
+   * @protected
    */
   _handleImpulseCommands() {
     if (this.impulse <= 0) {
@@ -1293,10 +1266,6 @@ export class PlayerEntity extends BaseEntity {
 
         case 255:
           this._cheatCommandQuad();
-          break;
-
-        case 20:
-          this._dropMoney();
           break;
 
         default:
@@ -1630,13 +1599,8 @@ export class PlayerEntity extends BaseEntity {
 
     this.setSize(hull[0][0], hull[0][1]);
 
-    this.#applySpawnParameters();
+    this._applySpawnParameters();
     this.setWeapon();
-  }
-
-  updateMoney(difference = 0) {
-    this.money += difference;
-    this.dispatchEvent(clientEvent.MONEY_UPDATE, this.money);
   }
 
   /**
@@ -1651,7 +1615,6 @@ export class PlayerEntity extends BaseEntity {
 
     // update client on stats
     this.game.stats.sendToPlayer(this);
-    this.updateMoney();
 
     this._enterStandingState();
 
@@ -2142,7 +2105,6 @@ export class PlayerEntity extends BaseEntity {
     // make sure the player gets a clean player, including no score (frags, etc.)
     this.clear();
     this.frags = 0;
-    this.money = 1000;
 
     // a client connecting during an intermission can cause problems
     if (this.game.intermission_running) {
@@ -2181,7 +2143,7 @@ export class PlayerEntity extends BaseEntity {
       CopyToBodyQue(this.game, this);
 
       // get the spawn parms as they were at level start
-      this.#applySpawnParameters();
+      this._applySpawnParameters();
 
       // respawn
       this.clear();
@@ -2194,7 +2156,7 @@ export class PlayerEntity extends BaseEntity {
       CopyToBodyQue(this.game, this);
 
       // set default spawn parms
-      this.#freshSpawnParameters();
+      this._freshSpawnParameters();
 
       // respawn
       this.clear();
