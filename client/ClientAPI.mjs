@@ -23,6 +23,9 @@ export class ClientGameAPI {
 
     weapon: 0,
     weaponframe: 0,
+
+    money: 0,
+    buyzone: 0,
   };
 
   /** @type {Record<string, string>} server cvar values */

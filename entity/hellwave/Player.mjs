@@ -1,7 +1,16 @@
 import Vector from '../../../../shared/Vector.mjs';
-import { clientEvent, flags, items, moveType } from '../../Defs.mjs';
+import { channel, clientEvent, flags, items, moveType } from '../../Defs.mjs';
 import { BackpackEntity } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
+import { Backpack } from '../Weapons.mjs';
+
+export const buyMenuItems = {
+  1: { cost: 200, label: 'Shotgun', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 10 } },
+  2: { cost: 400, label: 'Nailgun', backpack: { items: items.IT_NAILGUN | items.IT_NAILS, ammo_nails: 20 } },
+  3: { cost: 800, label: 'Rocket Launcher', backpack: { items: items.IT_ROCKET_LAUNCHER | items.IT_ROCKETS, ammo_rockets: 5 } },
+  4: { cost: 800, label: 'Grenade Launcher', backpack: { items: items.IT_GRENADE_LAUNCHER | items.IT_ROCKETS, ammo_rockets: 5 } },
+  5: { cost: 100, label: 'Light Armor', backpack: { items: items.IT_ARMOR1 } }, // TODO: add armorvalue, armortype
+};
 
 export default class HellwavePayer extends PlayerEntity {
   static clientEntityFields = [
@@ -10,11 +19,19 @@ export default class HellwavePayer extends PlayerEntity {
     'health',
   ];
 
+  static clientdataFields = [
+    ...PlayerEntity.clientdataFields,
+    'buyzone',
+  ];
+
   _declareFields() {
     super._declareFields();
 
     this._serializer.startFields();
     this.money = 0;
+    /** @type {0|1|2} 0 – outside the zone, 1 – inside the zone, 2 – inside the buy menu */
+    this.buyzone = 0;
+    this.buyzone_time = 0;
     this._serializer.endFields();
   }
 
@@ -114,7 +131,7 @@ export default class HellwavePayer extends PlayerEntity {
     this.game.stats.sendToPlayer(this);
     this.updateMoney();
 
-    this._spectate();
+    // this._spectate();
   }
 
   _handleImpulseCommands() {
@@ -123,14 +140,74 @@ export default class HellwavePayer extends PlayerEntity {
         this._dropMoney();
         this.impulse = 0;
         break;
+
+      case 21: // toggle buy menu
+        this._buyMenuRequested();
+        this.impulse = 0;
+        break;
+    }
+
+    if (this.buyzone === 2 && this.impulse > 0 && this.impulse < 9) {
+      this._buyMenuPurchase(this.impulse);
+      this.impulse = 0;
     }
 
     super._handleImpulseCommands();
   }
 
+  _buyMenuRequested() {
+    switch (this.buyzone) {
+      case 0:
+        this.consolePrint('you are not in a buyzone!\n');
+        return;
+
+      case 2:
+        this.buyzone = 1; // still inside the zone
+        return;
+
+      case 1:
+        this.buyzone = 2; // inside the buy menu
+        return;
+    }
+  }
+
+  _buyMenuPurchase(item) {
+    const menuItem = buyMenuItems[item];
+
+    if (!menuItem) {
+      this.consolePrint('invalid buy menu item ' + item + '\n');
+      return;
+    }
+
+    if (this.money < menuItem.cost) {
+      this.consolePrint('not enough money to buy item ' + item + ', need ' + menuItem.cost + '\n');
+      return;
+    }
+
+    // take the money
+    this.updateMoney(-menuItem.cost);
+
+    // apply backpack
+    if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
+      this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
+    }
+  }
+
   updateMoney(difference = 0) {
     this.money += difference;
     this.dispatchEvent(clientEvent.MONEY_UPDATE, this.money);
+  }
+
+  playerPostThink() {
+    super.playerPostThink();
+
+    // reset buyzone state once left the zone
+    // TODO: double check for what game phase we are in
+    if ((this.game.time - this.buyzone_time) > 0.1) {
+      this.buyzone = 0;
+    } else if (this.buyzone === 0) {
+      this.buyzone = 1; // inside the zone
+    }
   }
 };
 

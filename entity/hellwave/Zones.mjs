@@ -2,7 +2,7 @@ import Vector from '../../../../shared/Vector.mjs';
 import { moveType, solid } from '../../Defs.mjs';
 import BaseEntity from '../BaseEntity.mjs';
 import { DebugMarkerEntity, LightEntity } from '../Misc.mjs';
-import { PlayerEntity } from '../Player.mjs';
+import PlayerEntity from '../hellwave/Player.mjs';
 import { BaseTriggerEntity } from '../Triggers.mjs';
 import { WallEntity } from './Props.mjs';
 
@@ -31,6 +31,8 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     if (!(other instanceof PlayerEntity)) {
       return;
     }
+
+    other.buyzone_time = this.game.time;
 
     this._playerInsideTime[other.edictId] = this.game.time;
   }
@@ -104,11 +106,11 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     this.setModel(this.model); // sets size and absmin/absmax
     this.unsetModel(false);
 
-    this._scheduleThink(this.game.time + 0.1, function () { this.closeShop(); });
+    this._scheduleThink(this.game.time + 0.1, function () { this.openShop(); });
 
     // testing stuff:
-    this._scheduleThink(this.game.time + 5.0, function () { this.openShop(); });
-    this._scheduleThink(this.game.time + 15.0, function () { this.closeShop(); });
+    // this._scheduleThink(this.game.time + 5.0, function () { this.openShop(); });
+    // this._scheduleThink(this.game.time + 15.0, function () { this.closeShop(); });
   }
 };
 

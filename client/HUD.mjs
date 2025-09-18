@@ -1,11 +1,13 @@
 import Q from '../../../shared/Q.mjs';
 import Vector from '../../../shared/Vector.mjs';
 import { clientEvent, clientEventName, colors, contentShift, items } from '../Defs.mjs';
+import { buyMenuItems } from '../entity/hellwave/Player.mjs';
 import { weaponConfig } from '../entity/Weapons.mjs';
 import { ClientGameAPI } from './ClientAPI.mjs';
 
 /** @typedef {typeof import('../../../engine/common/GameAPIs.mjs').ClientEngineAPI} ClientEngineAPI */
 /** @typedef {import('../../../shared/GameInterfaces').GLTexture} GLTexture */
+/** @typedef {import('../entity/Weapons.mjs').WeaponConfigKey} WeaponConfigKey */
 
 const backgrounds = {
   /** @type {GLTexture} */
@@ -424,8 +426,8 @@ export default class HUD {
     this.#drawFace(112, 0);
 
     // Draw current ammo
-    if (weaponConfig.has(/** @type {import('../entity/Weapons.mjs').WeaponConfigKey} */(this.game.clientdata.weapon))) {
-      const weapon = weaponConfig.get(/** @type {import('../entity/Weapons.mjs').WeaponConfigKey} */(this.game.clientdata.weapon));
+    if (weaponConfig.has(/** @type {WeaponConfigKey} */(this.game.clientdata.weapon))) {
+      const weapon = weaponConfig.get(/** @type {WeaponConfigKey} */(this.game.clientdata.weapon));
 
       if (weapon.ammoSlot) {
         this.sbar.drawPic(224, 0, ammos[weapon.ammoSlot]);
@@ -553,6 +555,25 @@ export default class HUD {
     this.sbar.drawString(8, offsetY + 12, `${secrets.padEnd(19)} ${new String(this.engine.CL.levelname).trim().padStart(18)}`.substring(0, 38));
   }
 
+  #drawBuyMenu() {
+    if (this.game.clientdata.buyzone === 0) {
+      return; // not in a buyzone
+    }
+
+    if (this.game.clientdata.buyzone === 1 || this.game.clientdata.buyzone === 2) {
+      this.sbar.drawString(-16 * 10, -48, 'Buyzone!', 2.0, new Vector(0.0, 1.0, 0.0));
+    }
+
+    if (this.game.clientdata.buyzone === 2) {
+      const startY = -48 - 10 * 16;
+      this.sbar.drawString(0, startY, 'You are buying', 2.0);
+
+      for (const [impulse, item] of Object.entries(buyMenuItems)) {
+        this.sbar.drawString(0, startY + 24 + 16 * +impulse, `[${impulse}] ${`Q${item.cost}`.padStart(5)} - ${item.label}`, 2.0);
+      }
+    }
+  }
+
   #drawAccountBalance() {
     if (this.inventory.money === null) {
       return; // no money to display
@@ -571,6 +592,8 @@ export default class HUD {
       }
       this.sbar.drawString(0, -48, `Q${newBalance}`, 2.0, color);
     }
+
+    this.#drawBuyMenu();
   }
 
   #drawRoundStats() {
