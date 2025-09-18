@@ -299,7 +299,7 @@ export class KnightMonster extends WalkMonster {
       return;
     }
 
-    this._ai.foundTarget(attackerEntity);
+    this._ai.foundTarget(attackerEntity, true);
 
     if (Math.random() < 0.85) {
       this._runState('knight_pain1');
@@ -592,8 +592,6 @@ export class HellKnightMonster extends KnightMonster {
       // CR: the original code uses a precalcuated origin offset (see: org)
     });
 
-    // this.engine.SpawnEntity(Spike.classname, { owner: this });
-
     this.startSound(channel.CHAN_WEAPON, 'hknight/attack1.wav');
   }
 
@@ -662,7 +660,7 @@ export class HellKnightMonster extends KnightMonster {
       return;
     }
 
-    this._ai.foundTarget(attackerEntity);
+    this._ai.foundTarget(attackerEntity, true);
 
     this.painSound();
 

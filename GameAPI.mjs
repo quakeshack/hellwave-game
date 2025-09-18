@@ -24,6 +24,7 @@ import ShalrathMonsterEntity, { ShalrathMissileEntity, qc as shalrathModelQC } f
 import ShamblerMonsterEntity, { qc as shamblerModelQC } from './entity/monster/Shambler.mjs';
 import TarbabyMonsterEntity, { qc as tbabyModelQC } from './entity/monster/Tarbaby.mjs';
 import FishMonsterEntity, { qc as fishQC } from './entity/monster/Fish.mjs';
+import WizardMonsterEntity, { WizardMissile, qc as wizardQC } from './entity/monster/Wizard.mjs';
 
 import * as zones from './entity/hellwave/Zones.mjs';
 import GameManager from './GameManager.mjs';
@@ -135,6 +136,8 @@ export const entityRegistry = new Map([
   ShamblerMonsterEntity,
   TarbabyMonsterEntity,
   FishMonsterEntity,
+  WizardMonsterEntity,
+  WizardMissile,
 
   door.DoorEntity,
   door.SecretDoorEntity,
@@ -279,7 +282,7 @@ class GameStats {
 };
 
 /** @typedef {import('../../shared/GameInterfaces').ServerGameInterface} ServerGameInterface */
-/** @augments {ServerGameInterface} */
+/** @augments ServerGameInterface */
 export class ServerGameAPI {
   /**
    * Invoked by spawning a server or a changelevel. It will initialize the global game state.
@@ -363,6 +366,7 @@ export class ServerGameAPI {
       'progs/shambler.mdl': engineAPI.ParseQC(shamblerModelQC),
       'progs/tarbaby.mdl': engineAPI.ParseQC(tbabyModelQC),
       'progs/fish.mdl': engineAPI.ParseQC(fishQC),
+      'progs/wizard.mdl': engineAPI.ParseQC(wizardQC),
     };
 
     /** @private */

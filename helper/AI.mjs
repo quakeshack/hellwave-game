@@ -28,7 +28,7 @@ export class GameAI {
 /**
  * EntityAI interface.
  * @template {BaseMonster} T
- * @augments {EntityWrapper<T>}
+ * @augments EntityWrapper<T>
  */
 export class EntityAI extends EntityWrapper {
   /** @returns {GameAI} global AI state @protected */
@@ -111,9 +111,10 @@ export class EntityAI extends EntityWrapper {
   /**
    * Signalizes that a target entity has been found.
    * @param {BaseEntity} targetEntity entity to focus on
+   * @param {boolean} fromPain if set to true, we will not overwrite the next state
    */
   // eslint-disable-next-line no-unused-vars
-  foundTarget(targetEntity) {
+  foundTarget(targetEntity, fromPain) {
     // implement this
     console.assert(false, 'implement this');
   }
@@ -156,7 +157,7 @@ export const ATTACK_STATE = {
 /**
  * entity local AI state based on original Quake behavior
  * @template {BaseMonster} T
- * @augments {EntityAI<T>}
+ * @augments EntityAI<T>
  */
 export class QuakeEntityAI extends EntityAI {
   /**
@@ -256,6 +257,11 @@ export class QuakeEntityAI extends EntityAI {
       return;
     }
 
+    // nav mesh is only suited for ground based monsters
+    if (this._entity.flags & (flags.FL_FLY | flags.FL_SWIM)) {
+      return;
+    }
+
     if (this._oldKnownOrigin !== null) {
       if (this._entity.origin.distanceTo(this._oldKnownOrigin) > 64.0) {
         this._enemyMetadata.nextPathUpdateTime = 0.0; // force path update, we were teleported or got a huge push from somewhere
@@ -270,7 +276,7 @@ export class QuakeEntityAI extends EntityAI {
       this._enemyMetadata.nextKnownOriginTime = this._game.time + 10.0;
       this._enemyMetadata.nextPathUpdateTime = 0.0; // force path update
       this._gameAI._sightEntityLastOrigin.set(this._entity.enemy.origin);
-      console.info(`${this._entity} updated sight of enemy ${this._entity.enemy}, will search again in 10 seconds`);
+      console.debug(`${this._entity} updated sight of enemy ${this._entity.enemy}, will search again in 10 seconds`);
     }
 
     if (this._game.time > this._enemyMetadata.nextPathUpdateTime && !this._gameAI._sightEntityLastOrigin.isOrigin()) {
@@ -278,7 +284,7 @@ export class QuakeEntityAI extends EntityAI {
 
       if (newPath !== null) {
         this._path = newPath;
-        console.info(`${this._entity} updated path to enemy ${this._entity.enemy} with ${this._path.length} waypoints`);
+        console.debug(`${this._entity} updated path to enemy ${this._entity.enemy} with ${this._path.length} waypoints`);
       } else {
         console.warn(`${this._entity} could not find path to enemy ${this._entity.enemy}`);
       }
@@ -292,7 +298,6 @@ export class QuakeEntityAI extends EntityAI {
       const b = this._path[0].copy(); b[2] = 0.0;
       if (a.distanceTo(b) < 16.0) { // assume half a hull width
         const waypoint = this._path.shift(); // reached the waypoint
-
         console.debug(`${this._entity} reached waypoint ${waypoint}, ${this._path.length} waypoints left`);
       }
 
@@ -313,8 +318,11 @@ export class QuakeEntityAI extends EntityAI {
   _initialize() {
     const self = this._entity;
 
-    self.origin[2] += 1.0; // raise off floor a bit
-    self.dropToFloor();
+    // make sure enemies are on the floor (unless they can swim or levitate)
+    if ((self.flags & (flags.FL_FLY | flags.FL_SWIM)) === 0) {
+      self.origin[2] += 1.0; // raise off floor a bit
+      self.dropToFloor();
+    }
 
     // check for stuck enemies
     if (!self.walkMove(0, 0)) {
@@ -351,7 +359,7 @@ export class QuakeEntityAI extends EntityAI {
     }
 
     // spread think times so they don't all happen at same time
-    self.nextthink = self.nextthink + Math.random() * 0.5;
+    self.nextthink += Math.random() * 0.5;
 
     this._initialized = true;
   }
@@ -469,7 +477,7 @@ export class QuakeEntityAI extends EntityAI {
       }
     }
 
-    this.foundTarget(self.enemy);
+    this.foundTarget(self.enemy, false);
 
     return true;
   }
@@ -478,8 +486,9 @@ export class QuakeEntityAI extends EntityAI {
    * Signalizes that a target entity has been found.
    * Important: When called from thinkPain, make sure you want to break the current attack!
    * @param {BaseEntity} targetEntity enemy
+   * @param {boolean} fromPain if set to true, we will not overwrite the next state
    */
-  foundTarget(targetEntity) { // QuakeC: ai.qc/FoundTarget
+  foundTarget(targetEntity, fromPain) { // QuakeC: ai.qc/FoundTarget
     if (!this._stillAlive()) {
       return;
     }
@@ -492,14 +501,14 @@ export class QuakeEntityAI extends EntityAI {
 
     // a new enemy? compute a new path
     if (!this._entity.enemy.equals(this._oldEnemy)) {
-      console.info(`${this._entity} acquired new enemy ${this._entity.enemy}, force computing a new path`);
+      console.debug(`${this._entity} acquired new enemy ${this._entity.enemy}, force computing a new path`);
       this._enemyMetadata.nextPathUpdateTime = 0.0; // force path update
     }
 
     this._gameAI._sightEntityLastOrigin.set(this._entity.enemy.origin);
     this._enemyMetadata.nextKnownOriginTime = this._game.time + 10.0;
 
-    console.info(`${this._entity} updated last seen and origin of ${this._entity.enemy}`);
+    console.debug(`${this._entity} updated last seen and origin of ${this._entity.enemy}`);
 
     if (this._entity.enemy instanceof PlayerEntity) {
       // let other monsters see this monster for a while
@@ -510,10 +519,10 @@ export class QuakeEntityAI extends EntityAI {
     this._entity.show_hostile = this._game.time + 1.0;
 
     this._entity.sightSound();
-    this._huntTarget();
+    this._huntTarget(fromPain);
   }
 
-  _huntTarget() { // QuakeC: ai.qc/HuntTarget
+  _huntTarget(fromPain) { // QuakeC: ai.qc/HuntTarget
     if (!this._stillAlive()) {
       return;
     }
@@ -523,8 +532,10 @@ export class QuakeEntityAI extends EntityAI {
     this._entity.goalentity = this._entity.enemy;
     // this._entity.ideal_yaw = this._entity.enemy.origin.copy().subtract(this._entity.origin).toYaw();
 
-    // NOTE: keep it at 50 ms otherwise there will be a racy condition with the animation thinker causing dead monsters attacking the player
-    this._entity._scheduleThink(this._game.time + 0.05, this._entity.thinkRun);
+    if (!fromPain) {
+      // NOTE: keep it at 50 ms otherwise there will be a racy condition with the animation thinker causing dead monsters attacking the player
+      this._entity._scheduleThink(this._game.time + 0.05, this._entity.thinkRun);
+    }
 
     this._entity.attackFinished(1.0); // wait a while before first attack
 
@@ -650,7 +661,7 @@ export class QuakeEntityAI extends EntityAI {
       this._entity.enemy = null;
       // FIXME: look all around for other targets (original FIXME from QuakeC)
       if (this._oldEnemy?.health > 0) {
-        this.foundTarget(this._oldEnemy);
+        this.foundTarget(this._oldEnemy, false);
       } else {
         if (this._entity.movetarget) {
           this._entity.thinkWalk();
@@ -839,6 +850,11 @@ export class QuakeEntityAI extends EntityAI {
     if (!(userEntity instanceof PlayerEntity)) {
       return;
     }
+
+    // hive mind the position update
+    this._enemyMetadata.lastKnownOrigin.set(userEntity.origin);
+    this._enemyMetadata.nextKnownOriginTime = this._game.time + 10.0;
+    this._gameAI._sightEntityLastOrigin.set(userEntity.origin);
 
     this._entity.enemy = userEntity; // we need this in the next think and we cannot pass it along via the scope due to possible serialization
     this._entity._scheduleThink(this._game.time + 0.1, function () { this._ai.foundTarget(this.enemy); });
