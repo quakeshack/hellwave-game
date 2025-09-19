@@ -1,15 +1,15 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { channel, clientEvent, flags, items, moveType } from '../../Defs.mjs';
-import { BackpackEntity } from '../Items.mjs';
+import { BackpackEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
 import { Backpack } from '../Weapons.mjs';
 
 export const buyMenuItems = {
   1: { cost: 200, label: 'Shotgun', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 10 } },
-  2: { cost: 400, label: 'Nailgun', backpack: { items: items.IT_NAILGUN | items.IT_NAILS, ammo_nails: 20 } },
-  3: { cost: 800, label: 'Rocket Launcher', backpack: { items: items.IT_ROCKET_LAUNCHER | items.IT_ROCKETS, ammo_rockets: 5 } },
-  4: { cost: 800, label: 'Grenade Launcher', backpack: { items: items.IT_GRENADE_LAUNCHER | items.IT_ROCKETS, ammo_rockets: 5 } },
-  5: { cost: 100, label: 'Light Armor', backpack: { items: items.IT_ARMOR1 } }, // TODO: add armorvalue, armortype
+  2: { cost: 300, label: 'Nailgun', entityClass: WeaponNailgun },
+  3: { cost: 500, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
+  4: { cost: 500, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
+  5: { cost: 100, label: 'Light Armor', entityClass: LightArmorEntity },
 };
 
 export default class HellwavePayer extends PlayerEntity {
@@ -188,8 +188,18 @@ export default class HellwavePayer extends PlayerEntity {
     this.updateMoney(-menuItem.cost);
 
     // apply backpack
-    if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
-      this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
+    if (menuItem.backpack) {
+      if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
+        this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
+      }
+    }
+
+    // spawn entity to pick up
+    if (menuItem.entityClass) {
+      this.engine.SpawnEntity(menuItem.entityClass.classname, {
+        origin: this.origin.copy(),
+        angles: this.angles.copy(),
+      });
     }
   }
 
