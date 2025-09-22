@@ -27,7 +27,7 @@ import FishMonsterEntity, { qc as fishQC } from './entity/monster/Fish.mjs';
 import WizardMonsterEntity, { WizardMissile, qc as wizardQC } from './entity/monster/Wizard.mjs';
 
 import * as zones from './entity/hellwave/Zones.mjs';
-import GameManager from './GameManager.mjs';
+import GameManager, { phases } from './GameManager.mjs';
 import * as hwProps from './entity/hellwave/Props.mjs';
 import HellwavePayer from './entity/hellwave/Player.mjs';
 
@@ -204,6 +204,7 @@ const cvars = {
   coop: null,
 
   rounds: null,
+  quiettime: null,
 };
 
 /**
@@ -237,6 +238,9 @@ class GameStats {
     this.round_total = cvars.rounds.value;
     this.squad_standing = 0;
     this.squad_total = 0;
+    /** @type {keyof typeof phases} */
+    this.phase = phases.waiting;
+    this.phase_ending_time = 0; // game.time + X, in seconds
   }
 
   subscribeToEvents() {
@@ -252,6 +256,20 @@ class GameStats {
     this.engine.eventBus.subscribe('game.monster.killed', (monsterEntity, attackerEntity) => {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', ++this.monsters_killed, attackerEntity.edict);
     });
+
+    this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
+      if (this.phase !== newPhase) {
+        this.phase = newPhase;
+        this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase', this.phase);
+      }
+    });
+
+    this.engine.eventBus.subscribe('game.phase.endingtime', (newEndingTime) => {
+      if (this.phase_ending_time !== newEndingTime) {
+        this.phase_ending_time = newEndingTime;
+        this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase_ending_time', this.phase_ending_time);
+      }
+    });
   }
 
   updateSquadStats(squadStanding, squadTotal) {
@@ -264,6 +282,8 @@ class GameStats {
       this.squad_total = squadTotal;
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_total', this.squad_total);
     }
+
+    return this;
   }
 
   /**
@@ -278,6 +298,8 @@ class GameStats {
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_current', this.round_current);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_standing', this.squad_standing);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_total', this.squad_total);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase', this.phase);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase_ending_time', this.phase_ending_time);
   }
 };
 
@@ -427,6 +449,10 @@ export class ServerGameAPI {
 
   get gravity() {
     return this._cvars.gravity.value;
+  }
+
+  get quiettime() {
+    return cvars.quiettime.value;
   }
 
   hasFeature(feature) {
@@ -616,6 +642,9 @@ export class ServerGameAPI {
 
     // make sure stats are resubscribed
     this.stats.subscribeToEvents();
+
+    // make sure manager is subscribed
+    this.manager.subscribeToEvents();
   }
 
   // eslint-disable-next-line no-unused-vars
@@ -635,7 +664,8 @@ export class ServerGameAPI {
     cvars.coop = ServerEngineAPI.RegisterCvar('coop', '0');
 
     // hellwave specific cvars
-    cvars.rounds = ServerEngineAPI.RegisterCvar('rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
+    cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
+    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '10', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
 
     // initialize all entity classes
     for (const entityClass of entityRegistry.values()) {

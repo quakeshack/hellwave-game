@@ -3,6 +3,7 @@ import Vector from '../../../shared/Vector.mjs';
 import { clientEvent, clientEventName, colors, contentShift, items } from '../Defs.mjs';
 import { buyMenuItems } from '../entity/hellwave/Player.mjs';
 import { weaponConfig } from '../entity/Weapons.mjs';
+import { phases } from '../GameManager.mjs';
 import { ClientGameAPI } from './ClientAPI.mjs';
 
 /** @typedef {typeof import('../../../engine/common/GameAPIs.mjs').ClientEngineAPI} ClientEngineAPI */
@@ -223,6 +224,9 @@ export default class HUD {
     round_current: 0,
     squad_total: 0,
     squad_standing: 0,
+    /** @type {keyof typeof phases?} */
+    phase: null,
+    phase_ending_time: 0, // game.time + X, in seconds
   };
 
   inventory = {
@@ -569,7 +573,9 @@ export default class HUD {
       this.sbar.drawString(0, startY, 'You are buying', 2.0);
 
       for (const [impulse, item] of Object.entries(buyMenuItems)) {
-        this.sbar.drawString(0, startY + 24 + 16 * +impulse, `[${impulse}] ${`Q${item.cost}`.padStart(5)} - ${item.label}`, 2.0);
+        if (item.cost <= this.inventory.money[0]) {
+          this.sbar.drawString(0, startY + 24 + 16 * +impulse, `[${impulse}] ${`Q${item.cost}`.padStart(5)} - ${item.label}`, 2.0);
+        }
       }
     }
   }
@@ -599,6 +605,13 @@ export default class HUD {
   #drawRoundStats() {
     const string = `${this.stats.round_current} / ${this.stats.round_total}`;
     this.sbar.drawString(this.sbar.width - string.length * 16, -48, string, 2.0);
+
+    // in quiet phase, we show the timer
+    if (this.stats.phase === phases.quiet) {
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.time), 2.0);
+    } else {
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, phases[this.stats.phase] || '', 2.0);
+    }
   }
 
   draw() {

@@ -1,14 +1,20 @@
 import Vector from '../../shared/Vector.mjs';
+import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
 import ZombieMonster from './entity/monster/Zombie.mjs';
 import { PlayerEntity } from './entity/Player.mjs';
 import { ServerGameAPI } from './GameAPI.mjs';
 import { Serializer } from './helper/MiscHelpers.mjs';
 
+/** @enum {string} @readonly */
+export const phases = Object.freeze({
+  waiting: 'waiting', // waiting for players
+  quiet: 'quiet', // players can spawn, no monsters
+  normal: 'normal', // monsters spawn normally
+  action: 'action', // monsters spawn more frequently
+  gameover: 'gameover', // game over, waiting for intermission
+});
+
 export default class GameManager {
-  static PHASE_WAITING = 'waiting';
-  static PHASE_QUIET = 'quiet';
-  static PHASE_NORMAL = 'normal';
-  static PHASE_ACTION = 'action';
 
   /**
    * @param {ServerGameAPI} game game
@@ -25,16 +31,46 @@ export default class GameManager {
     this.spawnpoints = [];
     this.spawn_next = 0.0;
 
-    this.phase = '';
+    /** @type {keyof typeof phases} */
+    this.phase = phases.waiting;
+    this.phase_ending_time = 0; // game.time + X, in seconds
 
     this._serializer.endFields();
+  }
 
-    this.subscribeToEvents();
+  openRandomShop() {
+    const zones = Array.from(this.engine.FindAllByFieldAndValue('classname', BuyZoneEntity.classname));
+
+    /** @type {BuyZoneEntity?} */
+    const zone = zones[Math.floor(Math.random() * zones.length)]?.entity;
+
+    if (zone) {
+      zone.openShop();
+    }
+
+    this.engine.BroadcastPrint('Store is open!');
+  }
+
+  closeShops() {
+    for (const entity of this.engine.FindAllByFieldAndValue('classname', BuyZoneEntity.classname)) {
+      /** @type {BuyZoneEntity} */
+      const zone = entity.entity;
+      zone.closeShop();
+    }
+
+    this.engine.BroadcastPrint('Store is closed!');
   }
 
   subscribeToEvents() {
-
+    this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
+      if (newPhase === phases.quiet) {
+        this.openRandomShop();
+      } else {
+        this.closeShops();
+      }
+    });
   }
+
 
   spawnEnemies() {
     if (this.spawn_next > this.game.time || this.game.time < 2.0) {
@@ -94,7 +130,33 @@ export default class GameManager {
   }
 
   startFrame() {
+    this.checkGameState();
+  }
 
+  checkGameState() {
+    switch (this.phase) {
+      case phases.quiet:
+        if (this.phase_ending_time < this.game.time) {
+          this.startNormalPhase();
+        }
+        break;
+    }
+  }
+
+  startQuietPhase() {
+    this.phase = phases.quiet;
+    this.phase_ending_time = this.game.time + this.game.quiettime;
+
+    this.engine.eventBus.publish('game.phase.changed', phases.quiet);
+    this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+  }
+
+  startNormalPhase() {
+    this.phase = phases.normal;
+    this.phase_ending_time = -1;
+
+    this.engine.eventBus.publish('game.phase.changed', phases.normal);
+    this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
   }
 
   /**
@@ -105,6 +167,18 @@ export default class GameManager {
     // TODO:
     // - during quiet phase, spawn at a random spawn point
     // - during normal and active phase, become a spectator until the next round starts
+
+    switch (this.phase) {
+      case phases.waiting:
+        this.startQuietPhase();
+        break;
+      case phases.quiet:
+      case phases.normal:
+      case phases.action:
+      case phases.gameover:
+        // TODO: spawn as spectator
+        break;
+    }
   }
 
   /**
@@ -132,6 +206,7 @@ export default class GameManager {
 
     if (squadTotal === 0) {
       this.engine.ConsolePrint('no players left in the game\n');
+      this.resetGame();
       return;
     }
 
@@ -143,5 +218,9 @@ export default class GameManager {
 
     this.engine.ConsolePrint(`squad standing ${squadStanding}/${squadTotal}\n`);
     this.game.stats.updateSquadStats(squadStanding, squadTotal);
+  }
+
+  resetGame() {
+    this.engine.ConsolePrint('resetting game\n');
   }
 };

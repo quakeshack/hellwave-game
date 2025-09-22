@@ -1,5 +1,6 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { channel, clientEvent, flags, items, moveType } from '../../Defs.mjs';
+import { phases } from '../../GameManager.mjs';
 import { BackpackEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
 import { Backpack } from '../Weapons.mjs';
@@ -29,7 +30,7 @@ export default class HellwavePayer extends PlayerEntity {
 
     this._serializer.startFields();
     this.money = 0;
-    /** @type {0|1|2} 0 – outside the zone, 1 – inside the zone, 2 – inside the buy menu */
+    /** @type {-1|0|1|2} -1 – not allowed, 0 – outside the zone, 1 – inside the zone, 2 – inside the buy menu */
     this.buyzone = 0;
     this.buyzone_time = 0;
     this._serializer.endFields();
@@ -157,6 +158,9 @@ export default class HellwavePayer extends PlayerEntity {
 
   _buyMenuRequested() {
     switch (this.buyzone) {
+      case -1:
+        return;
+
       case 0:
         this.consolePrint('you are not in a buyzone!\n');
         return;
@@ -210,6 +214,11 @@ export default class HellwavePayer extends PlayerEntity {
 
   playerPostThink() {
     super.playerPostThink();
+
+    if (this.game.manager.phase !== phases.quiet) {
+      this.buyzone = -1;
+      return;
+    }
 
     // reset buyzone state once left the zone
     // TODO: double check for what game phase we are in

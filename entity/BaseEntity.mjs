@@ -27,9 +27,11 @@ class ScheduledThink {
 };
 
 /** @typedef {typeof BaseEntity} BaseEntityType */
+/** @typedef {import('../../id1/entity/BaseEntity.mjs').default} id1BaseEntity  */
 
 /**
  * @access package
+ * @augments id1BaseEntity
  */
 export default class BaseEntity {
   static classname = null;
