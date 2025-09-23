@@ -102,6 +102,10 @@ export default class GameManager {
         this.closeShops();
       }
     });
+
+    this.engine.eventBus.subscribe('game.player.died', (player, attacker) => {
+      this.checkSquadStatus(null);
+    });
   }
 
   spawnEnemies() {
@@ -291,6 +295,13 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
   }
 
+  startGameOverPhase() {
+    this.phase = phases.gameover;
+
+    this.engine.eventBus.publish('game.phase.changed', phases.gameover);
+    this.engine.eventBus.publish('game.phase.endingtime', 0);
+  }
+
   /**
    * @param {PlayerEntity} playerEntity player
    */
@@ -320,13 +331,17 @@ export default class GameManager {
    * @param {PlayerEntity} playerEntity player
    */
   clientDisconnected(playerEntity) {
+    this.checkSquadStatus(playerEntity);
+  }
+
+  checkSquadStatus(skipPlayerEntity = null) {
     let squadTotal = 0, squadStanding = 0;
 
     for (const clientEdict of this.engine.GetClients()) {
       /** @type {PlayerEntity} */
       const player = clientEdict.entity;
 
-      if (player.equals(playerEntity)) {
+      if (skipPlayerEntity && player.equals(skipPlayerEntity)) {
         continue; // skip the leaving player
       }
 
@@ -339,6 +354,8 @@ export default class GameManager {
       squadStanding++;
     }
 
+    this.game.stats.updateSquadStats(squadStanding, squadTotal);
+
     if (squadTotal === 0) {
       this.engine.ConsolePrint('no players left in the game\n');
       this.resetGame();
@@ -347,12 +364,11 @@ export default class GameManager {
 
     if (squadStanding === 0) {
       this.engine.ConsolePrint('all players are dead\n');
-      // TODO: game over event / intermission
+      this.startGameOverPhase();
       return;
     }
 
     this.engine.ConsolePrint(`squad standing ${squadStanding}/${squadTotal}\n`);
-    this.game.stats.updateSquadStats(squadStanding, squadTotal);
   }
 
   resetGame() {
