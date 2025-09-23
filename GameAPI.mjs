@@ -645,6 +645,11 @@ export class ServerGameAPI {
 
     // make sure manager is subscribed
     this.manager.subscribeToEvents();
+
+    // precache all resources
+    for (const entityClass of entityRegistry.values()) {
+      entityClass._precache(this.engine);
+    }
   }
 
   // eslint-disable-next-line no-unused-vars

@@ -46,6 +46,11 @@ export class BaseItemEntity extends BaseEntity {
     // this.dropToFloor();
   }
 
+  static _precache(engineAPI) {
+    engineAPI.PrecacheSound('items/itembk2.wav');
+    engineAPI.PrecacheSound('weapons/lock4.wav');
+  }
+
   _declareFields() {
     this._serializer.startFields();
 
@@ -194,6 +199,10 @@ export class BaseItemEntity extends BaseEntity {
  */
 export class BackpackEntity extends BaseItemEntity {
   static classname = 'item_backpack';
+
+  static _precache(engineAPI) {
+    engineAPI.PrecacheModel('progs/backpack.mdl');
+  }
 
   _declareFields() {
     super._declareFields();
@@ -491,13 +500,13 @@ export class BaseArtifactEntity extends BaseItemEntity {
 
   static _model = null;
   static _noise = null;
-  static _precache = { sounds: [] };
+  static _precacheList = { sounds: [] };
 
   _precache() {
     const thisClass = /** @type {typeof BaseArtifactEntity} */(this.constructor);
 
     this.engine.PrecacheModel(thisClass._model);
-    for (const sound of thisClass._precache.sounds) {
+    for (const sound of thisClass._precacheList.sounds) {
       this.engine.PrecacheSound(sound);
     }
   }
@@ -544,7 +553,7 @@ export class InvulnerabilityEntity extends BaseArtifactEntity {
 
   static _regenerationTime = 300; // 5 mins
 
-  static _precache = {
+  static _precacheList = {
     sounds: [
       'items/protect.wav',
       'items/protect2.wav',
@@ -571,7 +580,7 @@ export class InvisibilityEntity extends BaseArtifactEntity {
 
   static _regenerationTime = 300; // 5 mins
 
-  static _precache = {
+  static _precacheList = {
     sounds: [
       'items/inv1.wav',
       'items/inv2.wav',
@@ -596,7 +605,7 @@ export class RadsuitEntity extends BaseArtifactEntity {
   static _model = 'progs/suit.mdl';
   static _noise = 'items/suit.wav';
 
-  static _precache = {
+  static _precacheList = {
     sounds: [
       'items/suit.wav',
       'items/suit2.wav',
@@ -620,7 +629,7 @@ export class SuperDamageEntity extends BaseArtifactEntity {
   static _model = 'progs/quaddama.mdl';
   static _noise = 'items/damage.wav';
 
-  static _precache = {
+  static _precacheList = {
     sounds: [
       'items/damage.wav',
       'items/damage2.wav',
@@ -845,6 +854,11 @@ export class BaseArmorEntity extends BaseItemEntity {
   static _item = 0;
   static _skin = 0;
 
+  static _precache(engineAPI) {
+    engineAPI.PrecacheSound('items/armor1.wav');		// armor up
+    engineAPI.PrecacheModel('progs/armor.mdl');
+  }
+
   /**
    * @param {PlayerEntity} playerEntity player
    * @returns {boolean} whether the pickup was successful
@@ -869,10 +883,6 @@ export class BaseArmorEntity extends BaseItemEntity {
     const thisClass = /** @type {typeof BaseArmorEntity} */(this.constructor);
 
     return playerEntity.armortype * playerEntity.armorvalue < thisClass._armortype * thisClass._armorvalue;
-  }
-
-  _precache() {
-    this.engine.PrecacheModel('progs/armor.mdl');
   }
 
   spawn() {
@@ -933,14 +943,19 @@ export class HeavyArmorEntity extends BaseArmorEntity {
 export class BaseWeaponEntity extends BaseItemEntity {
   static _model = null;
   static _weapon = 0;
+  static _pickupSound = 'weapons/pkup.wav';
 
   _precache() {
-    this.engine.PrecacheModel(/** @type {typeof BaseWeaponEntity} */(this.constructor)._model);
+    const thisClass = /** @type {typeof BaseWeaponEntity} */(this.constructor);
+
+    this.engine.PrecacheModel(thisClass._model);
+    this.engine.PrecacheSound(thisClass._pickupSound);
   }
 
   spawn() {
     const thisClass = /** @type {typeof BaseWeaponEntity} */(this.constructor);
 
+    this.noise = thisClass._pickupSound;
     this.items = thisClass._weapon;
     this.weapon = thisClass._weapon;
     this.regeneration_time = 30.0;
