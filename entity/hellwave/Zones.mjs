@@ -129,11 +129,6 @@ export class BuyZoneShuttersEntity extends WallEntity {
 export class MonstersSpawnZoneEntity extends BaseEntity {
   static classname = 'func_spawnzone_monsters';
 
-  _precache() {
-    this.engine.PrecacheModel('progs/zombie.mdl');
-    this.engine.PrecacheModel('progs/h_zombie.mdl');
-  }
-
   spawn() {
     this.setModel(this.model); // sets size and absmin/absmax
 

@@ -205,6 +205,7 @@ const cvars = {
 
   rounds: null,
   quiettime: null,
+  normaltime: null,
 };
 
 /**
@@ -223,24 +224,20 @@ class GameStats {
 
     this._serializer = new Serializer(this, engineAPI);
     this._serializer.startFields();
-    this.reset();
-    this._serializer.endFields();
-
-    Object.seal(this);
-  }
-
-  reset() {
     this.monsters_total = 0;
     this.monsters_killed = 0;
     this.secrets_total = 0;
     this.secrets_found = 0;
     this.round_current = 0;
-    this.round_total = cvars.rounds.value;
+    this.round_total = 0;
     this.squad_standing = 0;
     this.squad_total = 0;
     /** @type {keyof typeof phases} */
     this.phase = phases.waiting;
     this.phase_ending_time = 0; // game.time + X, in seconds
+    this._serializer.endFields();
+
+    Object.seal(this);
   }
 
   subscribeToEvents() {
@@ -255,6 +252,24 @@ class GameStats {
 
     this.engine.eventBus.subscribe('game.monster.killed', (monsterEntity, attackerEntity) => {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', ++this.monsters_killed, attackerEntity.edict);
+    });
+
+    this.engine.eventBus.subscribe('game.round.started', (roundNumber, roundTotal) => {
+      this.round_current = roundNumber;
+      this.round_total = roundTotal;
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_current', this.round_current);
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_total', this.round_total);
+
+      // reset stats
+      this.monsters_total = 0;
+      this.monsters_killed = 0;
+      this.secrets_total = 0;
+      this.secrets_found = 0;
+
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', this.monsters_total);
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', this.monsters_killed);
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_total', this.secrets_total);
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_found', this.secrets_found);
     });
 
     this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
@@ -455,6 +470,10 @@ export class ServerGameAPI {
     return cvars.quiettime.value;
   }
 
+  get normaltime() {
+    return cvars.normaltime.value;
+  }
+
   hasFeature(feature) {
     return featureFlags.includes(feature);
   }
@@ -650,6 +669,8 @@ export class ServerGameAPI {
     for (const entityClass of entityRegistry.values()) {
       entityClass._precache(this.engine);
     }
+
+    this.manager.round_number_limit = Math.max(1, Math.min(20, cvars.rounds.value));
   }
 
   // eslint-disable-next-line no-unused-vars
@@ -671,6 +692,7 @@ export class ServerGameAPI {
     // hellwave specific cvars
     cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
     cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '10', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '60', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
 
     // initialize all entity classes
     for (const entityClass of entityRegistry.values()) {

@@ -1,5 +1,11 @@
 import Vector from '../../shared/Vector.mjs';
 import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
+import BaseMonster from './entity/monster/BaseMonster.mjs';
+import DogMonsterEntity from './entity/monster/Dog.mjs';
+import { KnightMonster } from './entity/monster/Knights.mjs';
+import OgreMonsterEntity from './entity/monster/Ogre.mjs';
+import { ArmyEnforcerMonster, ArmySoldierMonster } from './entity/monster/Soldier.mjs';
+import WizardMonsterEntity from './entity/monster/Wizard.mjs';
 import ZombieMonster from './entity/monster/Zombie.mjs';
 import { PlayerEntity } from './entity/Player.mjs';
 import { ServerGameAPI } from './GameAPI.mjs';
@@ -13,6 +19,27 @@ export const phases = Object.freeze({
   action: 'action', // monsters spawn more frequently
   gameover: 'gameover', // game over, waiting for intermission
 });
+
+const gameRoundMonsterMatrix = {
+  1: [
+    { classname: ZombieMonster.classname, probability: 0.3, limit: 1 },
+    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 1 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: KnightMonster.classname, probability: 0.2, limit: 2 },
+  ],
+  2: [
+    { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
+    { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
+    { classname: ArmySoldierMonster.classname, probability: 0.75 },
+  ],
+  3: [
+    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: WizardMonsterEntity, probability: 0.2 },
+    { classname: OgreMonsterEntity, probability: 1.0 },
+    { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
+  ],
+};
 
 export default class GameManager {
 
@@ -34,6 +61,12 @@ export default class GameManager {
     /** @type {keyof typeof phases} */
     this.phase = phases.waiting;
     this.phase_ending_time = 0; // game.time + X, in seconds
+
+    this.round_number = 0;
+    this.round_number_limit = Infinity;
+
+    /** @type {number} how many monsters to spawn within this round */
+    this.round_monsters_limit = 0;
 
     this._serializer.endFields();
   }
@@ -71,7 +104,6 @@ export default class GameManager {
     });
   }
 
-
   spawnEnemies() {
     if (this.spawn_next > this.game.time || this.game.time < 2.0) {
       return;
@@ -79,6 +111,10 @@ export default class GameManager {
 
     if (this.game.stats.monsters_total - this.game.stats.monsters_killed >= 20) {
       return; // too many monsters alive
+    }
+
+    if (this.game.stats.monsters_total >= this.round_monsters_limit) {
+      return; // reached the limit for this round
     }
 
     if (this.spawnpoints.length === 0) {
@@ -111,8 +147,52 @@ export default class GameManager {
 
     const goalentity = this.engine.FindInRadius(origin, 512.0, (edict) => edict.entity instanceof PlayerEntity)[0]?.entity || null;
 
+    // determine what to spawn
+    const monsterChoices = gameRoundMonsterMatrix[Math.min(this.round_number, Math.max(...Object.keys(gameRoundMonsterMatrix).map((k) => parseInt(k, 10))))] || []; // TODO: default
+
+    let totalProbability = 0.0;
+
+    for (const choice of monsterChoices) {
+      if (choice.limit && choice.limit > 0) {
+        const existing = Array.from(this.engine.FindAllByFieldAndValue('classname', choice.classname));
+
+        if (existing.length >= choice.limit) {
+          continue; // reached the limit for this monster type
+        }
+      }
+      totalProbability += choice.probability;
+    }
+
+    if (totalProbability <= 0.0) {
+      return; // nothing to spawn
+    }
+
+    let r = Math.random() * totalProbability;
+    let selectedChoice = null;
+
+    for (const choice of monsterChoices) {
+      if (choice.limit && choice.limit > 0) {
+        const existing = Array.from(this.engine.FindAllByFieldAndValue('classname', choice.classname));
+
+        if (existing.length >= choice.limit) {
+          continue; // reached the limit for this monster type
+        }
+      }
+
+      if (r < choice.probability) {
+        selectedChoice = choice;
+        break;
+      }
+
+      r -= choice.probability;
+    }
+
+    if (!selectedChoice) {
+      return; // no monster selected
+    }
+
     // spawn a zombie monster
-    const enemy = /** @type {ZombieMonster} */ (this.engine.SpawnEntity(ZombieMonster.classname, {
+    const enemy = /** @type {BaseMonster} */ (this.engine.SpawnEntity(selectedChoice.classname, {
       origin,
       enemy: goalentity,
       // TODO: facing angle (should face player)
@@ -126,21 +206,73 @@ export default class GameManager {
     }
 
     this.spawn_next = this.game.time + 1.0; // spawn next enemy in 1 second
-
   }
 
   startFrame() {
-    this.checkGameState();
+    this.assessGameState();
   }
 
-  checkGameState() {
+  /**
+   * Assess the current game state and make changes if necessary.
+   * In this method we have all rules and checks that need to be done every frame.
+   */
+  assessGameState() {
     switch (this.phase) {
       case phases.quiet:
-        if (this.phase_ending_time < this.game.time) {
+        if (this.phase_ending_time <= this.game.time) {
+          // TODO: better event to the players
           this.startNormalPhase();
         }
         break;
+
+      case phases.action:
+      case phases.normal:
+        if (this.game.stats.monsters_killed >= this.round_monsters_limit) {
+          this.roundFinished();
+          break;
+        }
+        this.spawnEnemies();
+        break;
+
+      case phases.gameover:
+        // TODO: gameover thinking
+        break;
+
+      case phases.waiting:
+        // we are waiting for players to join
+        break;
     }
+  }
+
+  roundFinished() {
+    this.engine.BroadcastPrint('Round complete! Well done!\n');
+    // TODO: better event to the players
+    this.startNextRound();
+  }
+
+  /**
+   * Start the next round, if possible.
+   * It will also set all the necessary variables and settings for the upcoming phases.
+   */
+  startNextRound() {
+    if (this.round_number === this.round_number_limit) {
+      this.engine.BroadcastPrint('Maximum number of rounds reached.\n');
+      // TODO: final boss mission
+      return;
+    }
+
+    this.round_number++;
+
+    const start = 20, end = 200;
+    const ratio = Math.pow(start / end, 1 / (this.round_number_limit - 1));
+
+    this.round_monsters_limit = start * Math.pow(ratio, this.round_number - 1);
+
+    // TODO: determine the probability and limits of special monsters, etc.
+
+    this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit);
+
+    this.startQuietPhase();
   }
 
   startQuietPhase() {
@@ -153,7 +285,7 @@ export default class GameManager {
 
   startNormalPhase() {
     this.phase = phases.normal;
-    this.phase_ending_time = -1;
+    this.phase_ending_time = this.game.time + this.game.normaltime;
 
     this.engine.eventBus.publish('game.phase.changed', phases.normal);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
@@ -170,9 +302,12 @@ export default class GameManager {
 
     switch (this.phase) {
       case phases.waiting:
-        this.startQuietPhase();
-        break;
+        this.startNextRound();
+      // eslint-disable-next-line no-fallthrough
       case phases.quiet:
+        // TODO: regular spawn
+        break;
+
       case phases.normal:
       case phases.action:
       case phases.gameover:
