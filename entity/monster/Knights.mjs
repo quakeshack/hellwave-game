@@ -114,14 +114,15 @@ export class KnightMonster extends WalkMonster {
     return new QuakeEntityAI(this);
   }
 
-  _precache() {
-    super._precache();
-    this.engine.PrecacheSound('knight/kdeath.wav');
-    this.engine.PrecacheSound('knight/khurt.wav');
-    this.engine.PrecacheSound('knight/ksight.wav');
-    this.engine.PrecacheSound('knight/sword1.wav');
-    this.engine.PrecacheSound('knight/sword2.wav');
-    this.engine.PrecacheSound('knight/idle.wav');
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
+
+    engineAPI.PrecacheSound('knight/kdeath.wav');
+    engineAPI.PrecacheSound('knight/khurt.wav');
+    engineAPI.PrecacheSound('knight/ksight.wav');
+    engineAPI.PrecacheSound('knight/sword1.wav');
+    engineAPI.PrecacheSound('knight/sword2.wav');
+    engineAPI.PrecacheSound('knight/idle.wav');
   }
 
   static _initStates() {

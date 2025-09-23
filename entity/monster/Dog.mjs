@@ -60,14 +60,14 @@ export default class DogMonsterEntity extends WalkMonster {
     this._serializer.endFields();
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheSound('dog/dattack1.wav');
-    this.engine.PrecacheSound('dog/ddeath.wav');
-    this.engine.PrecacheSound('dog/dpain1.wav');
-    this.engine.PrecacheSound('dog/dsight.wav');
-    this.engine.PrecacheSound('dog/idle.wav');
+    engineAPI.PrecacheSound('dog/dattack1.wav');
+    engineAPI.PrecacheSound('dog/ddeath.wav');
+    engineAPI.PrecacheSound('dog/dpain1.wav');
+    engineAPI.PrecacheSound('dog/dsight.wav');
+    engineAPI.PrecacheSound('dog/idle.wav');
   }
 
   static _initStates() {

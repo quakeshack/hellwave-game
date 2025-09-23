@@ -60,16 +60,14 @@ export default class BaseMonster extends BaseEntity {
     return this.angles;
   }
 
-  _precache() {
-    // precache monster model
-    this.engine.PrecacheModel(/** @type {typeof BaseMonster} */(this.constructor)._modelDefault);
-    this.engine.PrecacheModel(/** @type {typeof BaseMonster} */(this.constructor)._modelHead);
+  static _precache(engineAPI) {
+    engineAPI.PrecacheModel(this._modelDefault);
+    engineAPI.PrecacheModel(this._modelHead);
 
-    // gib assets
-    this.engine.PrecacheModel('progs/gib1.mdl');
-    this.engine.PrecacheModel('progs/gib2.mdl');
-    this.engine.PrecacheModel('progs/gib3.mdl');
-    this.engine.PrecacheSound('player/udeath.wav');
+    engineAPI.PrecacheModel('progs/gib1.mdl');
+    engineAPI.PrecacheModel('progs/gib2.mdl');
+    engineAPI.PrecacheModel('progs/gib3.mdl');
+    engineAPI.PrecacheSound('player/udeath.wav');
   }
 
   /**

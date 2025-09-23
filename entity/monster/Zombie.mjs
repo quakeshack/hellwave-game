@@ -77,18 +77,19 @@ export default class ZombieMonster extends WalkMonster {
     this._serializer.endFields();
   }
 
-  _precache() {
-    super._precache();
-    this.engine.PrecacheSound('zombie/z_idle.wav');
-    this.engine.PrecacheSound('zombie/z_idle1.wav');
-    this.engine.PrecacheSound('zombie/z_shot1.wav');
-    this.engine.PrecacheSound('zombie/z_gib.wav');
-    this.engine.PrecacheSound('zombie/z_pain.wav');
-    this.engine.PrecacheSound('zombie/z_pain1.wav');
-    this.engine.PrecacheSound('zombie/z_fall.wav');
-    this.engine.PrecacheSound('zombie/z_miss.wav');
-    this.engine.PrecacheSound('zombie/z_hit.wav');
-    this.engine.PrecacheSound('zombie/idle_w2.wav');
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
+
+    engineAPI.PrecacheSound('zombie/z_idle.wav');
+    engineAPI.PrecacheSound('zombie/z_idle1.wav');
+    engineAPI.PrecacheSound('zombie/z_shot1.wav');
+    engineAPI.PrecacheSound('zombie/z_gib.wav');
+    engineAPI.PrecacheSound('zombie/z_pain.wav');
+    engineAPI.PrecacheSound('zombie/z_pain1.wav');
+    engineAPI.PrecacheSound('zombie/z_fall.wav');
+    engineAPI.PrecacheSound('zombie/z_miss.wav');
+    engineAPI.PrecacheSound('zombie/z_hit.wav');
+    engineAPI.PrecacheSound('zombie/idle_w2.wav');
   }
 
   get netname() {

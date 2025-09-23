@@ -87,15 +87,15 @@ export class ArmySoldierMonster extends WalkMonster {
     return 'a Grunt';
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheSound('soldier/death1.wav');
-    this.engine.PrecacheSound('soldier/idle.wav');
-    this.engine.PrecacheSound('soldier/pain1.wav');
-    this.engine.PrecacheSound('soldier/pain2.wav');
-    this.engine.PrecacheSound('soldier/sattck1.wav');
-    this.engine.PrecacheSound('soldier/sight1.wav');
+    engineAPI.PrecacheSound('soldier/death1.wav');
+    engineAPI.PrecacheSound('soldier/idle.wav');
+    engineAPI.PrecacheSound('soldier/pain1.wav');
+    engineAPI.PrecacheSound('soldier/pain2.wav');
+    engineAPI.PrecacheSound('soldier/sattck1.wav');
+    engineAPI.PrecacheSound('soldier/sight1.wav');
   }
 
   _newEntityAI() {

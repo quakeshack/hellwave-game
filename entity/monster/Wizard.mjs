@@ -55,18 +55,17 @@ export default class WizardMonsterEntity extends FlyMonster {
     this._serializer.endFields();
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheModel('progs/w_spike.mdl');
-
-    this.engine.PrecacheSound('wizard/hit.wav');
-    this.engine.PrecacheSound('wizard/wattack.wav');
-    this.engine.PrecacheSound('wizard/wdeath.wav');
-    this.engine.PrecacheSound('wizard/widle1.wav');
-    this.engine.PrecacheSound('wizard/widle2.wav');
-    this.engine.PrecacheSound('wizard/wpain.wav');
-    this.engine.PrecacheSound('wizard/wsight.wav');
+    engineAPI.PrecacheModel('progs/w_spike.mdl');
+    engineAPI.PrecacheSound('wizard/hit.wav');
+    engineAPI.PrecacheSound('wizard/wattack.wav');
+    engineAPI.PrecacheSound('wizard/wdeath.wav');
+    engineAPI.PrecacheSound('wizard/widle1.wav');
+    engineAPI.PrecacheSound('wizard/widle2.wav');
+    engineAPI.PrecacheSound('wizard/wpain.wav');
+    engineAPI.PrecacheSound('wizard/wsight.wav');
   }
 
   static _initStates() {

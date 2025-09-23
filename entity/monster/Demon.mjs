@@ -54,9 +54,7 @@ export default class DemonMonster extends WalkMonster {
     this._serializer.endFields();
   }
 
-  _precache() {
-    super._precache();
-
+  static _precache(engineAPI) {
     for (const s of [
       'demon/ddeath.wav',
       'demon/dhit2.wav',
@@ -65,7 +63,7 @@ export default class DemonMonster extends WalkMonster {
       'demon/idle1.wav',
       'demon/sight2.wav',
     ]) {
-      this.engine.PrecacheSound(s);
+      engineAPI.PrecacheSound(s);
     }
   }
 

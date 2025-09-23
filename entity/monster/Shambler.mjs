@@ -62,20 +62,20 @@ export default class ShamblerMonsterEntity extends WalkMonster {
     return new QuakeEntityAI(this);
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheModel('progs/s_light.mdl');
-    this.engine.PrecacheModel('progs/bolt.mdl');
-    this.engine.PrecacheSound('shambler/sattck1.wav');
-    this.engine.PrecacheSound('shambler/sboom.wav');
-    this.engine.PrecacheSound('shambler/sdeath.wav');
-    this.engine.PrecacheSound('shambler/shurt2.wav');
-    this.engine.PrecacheSound('shambler/sidle.wav');
-    this.engine.PrecacheSound('shambler/ssight.wav');
-    this.engine.PrecacheSound('shambler/melee1.wav');
-    this.engine.PrecacheSound('shambler/melee2.wav');
-    this.engine.PrecacheSound('shambler/smack.wav');
+    engineAPI.PrecacheModel('progs/s_light.mdl');
+    engineAPI.PrecacheModel('progs/bolt.mdl');
+    engineAPI.PrecacheSound('shambler/sattck1.wav');
+    engineAPI.PrecacheSound('shambler/sboom.wav');
+    engineAPI.PrecacheSound('shambler/sdeath.wav');
+    engineAPI.PrecacheSound('shambler/shurt2.wav');
+    engineAPI.PrecacheSound('shambler/sidle.wav');
+    engineAPI.PrecacheSound('shambler/ssight.wav');
+    engineAPI.PrecacheSound('shambler/melee1.wav');
+    engineAPI.PrecacheSound('shambler/melee2.wav');
+    engineAPI.PrecacheSound('shambler/smack.wav');
   }
 
   static _initStates() {

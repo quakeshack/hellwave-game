@@ -41,12 +41,12 @@ export default class FishMonsterEntity extends SwimMonster {
     return new QuakeEntityAI(this);
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheSound('fish/death.wav');
-    this.engine.PrecacheSound('fish/bite.wav');
-    this.engine.PrecacheSound('fish/idle.wav');
+    engineAPI.PrecacheSound('fish/death.wav');
+    engineAPI.PrecacheSound('fish/bite.wav');
+    engineAPI.PrecacheSound('fish/idle.wav');
   }
 
   static _initStates() {
