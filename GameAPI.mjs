@@ -516,6 +516,8 @@ export class ServerGameAPI {
   PutClientInServer(clientEdict) {
     const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
     playerEntity.putPlayerInServer();
+
+    this.manager.putPlayerInServer(playerEntity);
   }
 
   /**

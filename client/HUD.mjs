@@ -236,7 +236,7 @@ export default class HUD {
 
   /** damage related states */
   damage = {
-    /** time when the last damage was received based on CL.time */
+    /** time when the last damage was received based on CL.gametime */
     time: -Infinity,
 
     /** attack origin vector */
@@ -304,7 +304,7 @@ export default class HUD {
 
     // damage received
     this.engine.eventBus.subscribe('client.damage', (/** @type {import('../../../shared/GameInterfaces').ClientDamageEvent} */ clientDamageEvent) => {
-      this.damage.time = this.engine.CL.time;
+      this.damage.time = this.engine.CL.gametime;
       this.damage.attackOrigin.set(clientDamageEvent.attackOrigin);
       this.damage.damageReceived += clientDamageEvent.damageReceived;
 
@@ -354,7 +354,7 @@ export default class HUD {
     this.engine.eventBus.subscribe(clientEventName(clientEvent.INTERMISSION_START), (message, origin, angles) => {
       this.intermission.running = true;
       this.intermission.message = message || null;
-      this.intermission.mapCompletedTime = this.engine.CL.time;
+      this.intermission.mapCompletedTime = this.engine.CL.gametime;
 
       this.engine.CL.intermission = true;
 
@@ -362,7 +362,7 @@ export default class HUD {
     });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance) => {
-      this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.time];
+      this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.gametime];
     });
   }
 
@@ -590,7 +590,7 @@ export default class HUD {
     if (this.inventory.money[0] !== null) {
       const newBalance = this.inventory.money[0] || 0;
       const oldBalance = this.inventory.money[1] || 0;
-      const colorComponent = Math.min(1.0, Math.max(0.0, (this.engine.CL.time - this.inventory.money[2]) / 3.0));
+      const colorComponent = Math.min(1.0, Math.max(0.0, (this.engine.CL.gametime - this.inventory.money[2]) / 3.0));
       if (newBalance > oldBalance) {
         color[0] = color[2] = colorComponent;
       } else if (newBalance < oldBalance) {
@@ -608,7 +608,7 @@ export default class HUD {
 
     // in quiet phase, we show the timer
     if (this.stats.phase === phases.quiet) {
-      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.time), 2.0);
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.gametime), 2.0);
     } else {
       this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, phases[this.stats.phase] || '', 2.0);
     }

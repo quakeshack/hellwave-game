@@ -1,4 +1,5 @@
 import Vector from '../../shared/Vector.mjs';
+import HellwavePayer from './entity/hellwave/Player.mjs';
 import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
 import BaseMonster from './entity/monster/BaseMonster.mjs';
 import DogMonsterEntity from './entity/monster/Dog.mjs';
@@ -35,8 +36,8 @@ const gameRoundMonsterMatrix = {
   ],
   3: [
     { classname: DogMonsterEntity.classname, probability: 1.0 },
-    { classname: WizardMonsterEntity, probability: 0.2 },
-    { classname: OgreMonsterEntity, probability: 1.0 },
+    { classname: WizardMonsterEntity.classname, probability: 0.2 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
     { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
   ],
 };
@@ -81,7 +82,7 @@ export default class GameManager {
       zone.openShop();
     }
 
-    this.engine.BroadcastPrint('Store is open!');
+    this.engine.BroadcastPrint('Store is open!\n');
   }
 
   closeShops() {
@@ -91,7 +92,7 @@ export default class GameManager {
       zone.closeShop();
     }
 
-    this.engine.BroadcastPrint('Store is closed!');
+    this.engine.BroadcastPrint('Store is closed!\n');
   }
 
   subscribeToEvents() {
@@ -105,6 +106,12 @@ export default class GameManager {
 
     this.engine.eventBus.subscribe('game.player.died', (player, attacker) => {
       this.checkSquadStatus(null);
+    });
+
+    this.engine.eventBus.subscribe('game.monster.killed', (monster, attacker) => {
+      if (attacker instanceof HellwavePayer) {
+        attacker.updateMoney(100); // TODO: different money for different monsters
+      }
     });
   }
 
@@ -123,6 +130,10 @@ export default class GameManager {
 
     if (this.spawnpoints.length === 0) {
       return; // no spawn points
+    }
+
+    if (this.phase !== phases.normal && this.phase !== phases.action) {
+      return; // no longer valid
     }
 
     const origin = new Vector();
@@ -148,6 +159,8 @@ export default class GameManager {
     if (origin.isOrigin()) {
       return; // no spawn point found
     }
+
+    this.spawn_next = this.game.time + (this.phase === phases.action ? 1.0 : 5.0); // spawn next enemy in 1 second
 
     const goalentity = this.engine.FindInRadius(origin, 512.0, (edict) => edict.entity instanceof PlayerEntity)[0]?.entity || null;
 
@@ -208,8 +221,6 @@ export default class GameManager {
     if (goalentity !== null) {
       enemy.hunt(goalentity);
     }
-
-    this.spawn_next = this.game.time + 1.0; // spawn next enemy in 1 second
   }
 
   startFrame() {
@@ -231,6 +242,10 @@ export default class GameManager {
 
       case phases.action:
       case phases.normal:
+        if (this.phase_ending_time <= this.game.time) {
+          this.startActionPhase();
+          break;
+        }
         if (this.game.stats.monsters_killed >= this.round_monsters_limit) {
           this.roundFinished();
           break;
@@ -265,14 +280,18 @@ export default class GameManager {
       return;
     }
 
+    // cleaning up all the corpses
+    for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
+      const entity = /** @type {BaseMonster} */(edict.entity);
+      entity.lazyRemove();
+    }
+
     this.round_number++;
 
     const start = 20, end = 200;
     const ratio = Math.pow(start / end, 1 / (this.round_number_limit - 1));
 
     this.round_monsters_limit = start * Math.pow(ratio, this.round_number - 1);
-
-    // TODO: determine the probability and limits of special monsters, etc.
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit);
 
@@ -283,7 +302,7 @@ export default class GameManager {
     this.phase = phases.quiet;
     this.phase_ending_time = this.game.time + this.game.quiettime;
 
-    this.engine.eventBus.publish('game.phase.changed', phases.quiet);
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
   }
 
@@ -291,14 +310,23 @@ export default class GameManager {
     this.phase = phases.normal;
     this.phase_ending_time = this.game.time + this.game.normaltime;
 
-    this.engine.eventBus.publish('game.phase.changed', phases.normal);
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+  }
+
+  startActionPhase() {
+    this.phase = phases.action;
+    this.phase_ending_time = Infinity;
+
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
+    this.engine.eventBus.publish('game.phase.endingtime', 0);
   }
 
   startGameOverPhase() {
     this.phase = phases.gameover;
+    this.phase_ending_time = this.game.time + 10.0; // 10 seconds until next map
 
-    this.engine.eventBus.publish('game.phase.changed', phases.gameover);
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', 0);
   }
 
@@ -334,6 +362,13 @@ export default class GameManager {
     this.checkSquadStatus(playerEntity);
   }
 
+  /**
+   * @param {PlayerEntity} playerEntity player
+   */
+  putPlayerInServer(playerEntity) {
+    // TODO:
+  }
+
   checkSquadStatus(skipPlayerEntity = null) {
     let squadTotal = 0, squadStanding = 0;
 
@@ -356,13 +391,13 @@ export default class GameManager {
 
     this.game.stats.updateSquadStats(squadStanding, squadTotal);
 
-    if (squadTotal === 0) {
+    if (squadTotal <= 0) {
       this.engine.ConsolePrint('no players left in the game\n');
       this.resetGame();
       return;
     }
 
-    if (squadStanding === 0) {
+    if (squadStanding <= 0) {
       this.engine.ConsolePrint('all players are dead\n');
       this.startGameOverPhase();
       return;
