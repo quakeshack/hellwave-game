@@ -778,6 +778,13 @@ export class HealthItemEntity extends BaseItemEntity {
     return HealthItemEntity._config[this.spawnflags & 3];
   }
 
+  static _precache(engineAPI) {
+    for (const config of Object.values(HealthItemEntity._config)) {
+      engineAPI.PrecacheModel(config.model);
+      engineAPI.PrecacheSound(config.noise);
+    }
+  }
+
   _precache() {
     this.engine.PrecacheModel(this._config.model);
     this.engine.PrecacheSound(this._config.noise);

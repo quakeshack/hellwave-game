@@ -348,6 +348,11 @@ export default class HUD {
       if (slot === 'secrets_found') {
         this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_SECRET), 0.2);
       }
+
+      if (slot === 'phase') {
+        this.engine.LoadSound('misc/talk.wav').play();
+        this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
+      }
     });
 
     // intermission screen
@@ -569,8 +574,8 @@ export default class HUD {
     }
 
     if (this.game.clientdata.buyzone === 2) {
-      const startY = -48 - 10 * 16;
-      this.sbar.drawString(0, startY, 'You are buying', 2.0);
+      const startY = -48 - 16 * 16;
+      this.sbar.drawString(0, startY, 'Available to buy:', 2.0);
 
       for (const [impulse, item] of Object.entries(buyMenuItems)) {
         if (item.cost <= this.inventory.money[0]) {

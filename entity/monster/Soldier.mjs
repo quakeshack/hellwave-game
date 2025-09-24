@@ -355,20 +355,20 @@ export class ArmyEnforcerMonster extends WalkMonster {
     return new QuakeEntityAI(this);
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheModel('progs/laser.mdl');
-    this.engine.PrecacheSound('enforcer/death1.wav');
-    this.engine.PrecacheSound('enforcer/enfire.wav');
-    this.engine.PrecacheSound('enforcer/enfstop.wav');
-    this.engine.PrecacheSound('enforcer/idle1.wav');
-    this.engine.PrecacheSound('enforcer/pain1.wav');
-    this.engine.PrecacheSound('enforcer/pain2.wav');
-    this.engine.PrecacheSound('enforcer/sight1.wav');
-    this.engine.PrecacheSound('enforcer/sight2.wav');
-    this.engine.PrecacheSound('enforcer/sight3.wav');
-    this.engine.PrecacheSound('enforcer/sight4.wav');
+    engineAPI.PrecacheModel('progs/laser.mdl');
+    engineAPI.PrecacheSound('enforcer/death1.wav');
+    engineAPI.PrecacheSound('enforcer/enfire.wav');
+    engineAPI.PrecacheSound('enforcer/enfstop.wav');
+    engineAPI.PrecacheSound('enforcer/idle1.wav');
+    engineAPI.PrecacheSound('enforcer/pain1.wav');
+    engineAPI.PrecacheSound('enforcer/pain2.wav');
+    engineAPI.PrecacheSound('enforcer/sight1.wav');
+    engineAPI.PrecacheSound('enforcer/sight2.wav');
+    engineAPI.PrecacheSound('enforcer/sight3.wav');
+    engineAPI.PrecacheSound('enforcer/sight4.wav');
   }
 
   static _initStates() {

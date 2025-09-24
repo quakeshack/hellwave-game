@@ -227,15 +227,15 @@ export default class OgreMonsterEntity extends WalkMonster {
     this._defineState('ogre_bdie10', 'bdeath10', null, function() {});
   }
 
-  _precache() {
-    super._precache();
-    this.engine.PrecacheSound('ogre/ogdrag.wav');
-    this.engine.PrecacheSound('ogre/ogdth.wav');
-    this.engine.PrecacheSound('ogre/ogidle.wav');
-    this.engine.PrecacheSound('ogre/ogidle2.wav');
-    this.engine.PrecacheSound('ogre/ogpain1.wav');
-    this.engine.PrecacheSound('ogre/ogsawatk.wav');
-    this.engine.PrecacheSound('ogre/ogwake.wav');
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
+    engineAPI.PrecacheSound('ogre/ogdrag.wav');
+    engineAPI.PrecacheSound('ogre/ogdth.wav');
+    engineAPI.PrecacheSound('ogre/ogidle.wav');
+    engineAPI.PrecacheSound('ogre/ogidle2.wav');
+    engineAPI.PrecacheSound('ogre/ogpain1.wav');
+    engineAPI.PrecacheSound('ogre/ogsawatk.wav');
+    engineAPI.PrecacheSound('ogre/ogwake.wav');
   }
 
   _fireGrenade() {

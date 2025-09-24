@@ -1,10 +1,13 @@
 import Vector from '../../shared/Vector.mjs';
 import HellwavePayer from './entity/hellwave/Player.mjs';
 import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
+import { TeleportEffectEntity } from './entity/Misc.mjs';
 import BaseMonster from './entity/monster/BaseMonster.mjs';
 import DogMonsterEntity from './entity/monster/Dog.mjs';
-import { KnightMonster } from './entity/monster/Knights.mjs';
+import { HellKnightMonster, KnightMonster } from './entity/monster/Knights.mjs';
 import OgreMonsterEntity from './entity/monster/Ogre.mjs';
+import { ShalrathMissileEntity } from './entity/monster/Shalrath.mjs';
+import ShamblerMonsterEntity from './entity/monster/Shambler.mjs';
 import { ArmyEnforcerMonster, ArmySoldierMonster } from './entity/monster/Soldier.mjs';
 import WizardMonsterEntity from './entity/monster/Wizard.mjs';
 import ZombieMonster from './entity/monster/Zombie.mjs';
@@ -33,12 +36,34 @@ const gameRoundMonsterMatrix = {
     { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
     { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
     { classname: ArmySoldierMonster.classname, probability: 0.75 },
+    { classname: KnightMonster.classname, probability: 0.5 },
   ],
   3: [
-    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: ArmySoldierMonster.classname, probability: 0.2 },
     { classname: WizardMonsterEntity.classname, probability: 0.2 },
     { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
+    { classname: ZombieMonster.classname, probability: 0.2 },
+    { classname: KnightMonster.classname, probability: 0.5 },
+    { classname: HellKnightMonster.classname, probability: 0.2, limit: 3 },
+  ],
+  4: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 1.0 },
+    { classname: ZombieMonster.classname, probability: 0.5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5 },
+    { classname: ArmySoldierMonster.classname, probability: 0.2 },
+  ],
+  5: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 1.0 },
+    { classname: ShalrathMissileEntity.classname, probability: 0.7 },
+    { classname: ZombieMonster.classname, probability: 0.2 },
+    { classname: HellKnightMonster.classname, probability: 1.0 },
+    { classname: ArmySoldierMonster.classname, probability: 0.3 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
   ],
 };
 
@@ -116,12 +141,16 @@ export default class GameManager {
   }
 
   spawnEnemies() {
-    if (this.spawn_next > this.game.time || this.game.time < 2.0) {
+    if (this.spawn_next > this.game.time) {
       return;
     }
 
-    if (this.game.stats.monsters_total - this.game.stats.monsters_killed >= 20) {
-      return; // too many monsters alive
+    if (this.game.maxmonstersalive > 0) {
+      const clients = Array.from(this.engine.GetClients()).length;
+
+      if (this.game.stats.monsters_total - this.game.stats.monsters_killed >= this.game.maxmonstersalive * clients) {
+        return; // too many monsters alive
+      }
     }
 
     if (this.game.stats.monsters_total >= this.round_monsters_limit) {
@@ -160,9 +189,9 @@ export default class GameManager {
       return; // no spawn point found
     }
 
-    this.spawn_next = this.game.time + (this.phase === phases.action ? 1.0 : 5.0); // spawn next enemy in 1 second
+    this.spawn_next = this.game.time + (this.phase === phases.action ? 0.5 : 3.0);
 
-    const goalentity = this.engine.FindInRadius(origin, 512.0, (edict) => edict.entity instanceof PlayerEntity)[0]?.entity || null;
+    const goalentity = this.engine.FindInRadius(origin, 4096.0, (edict) => edict.entity instanceof PlayerEntity)[0]?.entity || null;
 
     // determine what to spawn
     const monsterChoices = gameRoundMonsterMatrix[Math.min(this.round_number, Math.max(...Object.keys(gameRoundMonsterMatrix).map((k) => parseInt(k, 10))))] || []; // TODO: default
@@ -215,7 +244,9 @@ export default class GameManager {
       // TODO: facing angle (should face player)
     }));
 
-    console.log(`spawned enemy ${enemy} at ${origin} goal ${goalentity}`, enemy);
+    this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
+
+    console.debug(`spawned enemy ${enemy} at ${origin} goal ${goalentity}`, enemy);
 
     // send off into the world
     if (goalentity !== null) {
@@ -288,10 +319,12 @@ export default class GameManager {
 
     this.round_number++;
 
+    const clients = Array.from(this.engine.GetClients()).length;
+
     const start = 20, end = 200;
     const ratio = Math.pow(start / end, 1 / (this.round_number_limit - 1));
 
-    this.round_monsters_limit = start * Math.pow(ratio, this.round_number - 1);
+    this.round_monsters_limit = start * Math.pow(ratio, this.round_number - 1) * clients;
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit);
 
@@ -307,6 +340,8 @@ export default class GameManager {
   }
 
   startNormalPhase() {
+    this.spawn_next = this.game.time + 5.0; // wait a bit before spawning the first enemy
+
     this.phase = phases.normal;
     this.phase_ending_time = this.game.time + this.game.normaltime;
 
@@ -335,6 +370,19 @@ export default class GameManager {
    */
   // eslint-disable-next-line no-unused-vars
   clientConnected(playerEntity) {
+  }
+
+  /**
+   * @param {PlayerEntity} playerEntity player
+   */
+  clientDisconnected(playerEntity) {
+    this.checkSquadStatus(playerEntity);
+  }
+
+  /**
+   * @param {PlayerEntity} playerEntity player
+   */
+  clientBeing(playerEntity) {
     // TODO:
     // - during quiet phase, spawn at a random spawn point
     // - during normal and active phase, become a spectator until the next round starts
@@ -353,20 +401,6 @@ export default class GameManager {
         // TODO: spawn as spectator
         break;
     }
-  }
-
-  /**
-   * @param {PlayerEntity} playerEntity player
-   */
-  clientDisconnected(playerEntity) {
-    this.checkSquadStatus(playerEntity);
-  }
-
-  /**
-   * @param {PlayerEntity} playerEntity player
-   */
-  putPlayerInServer(playerEntity) {
-    // TODO:
   }
 
   checkSquadStatus(skipPlayerEntity = null) {
@@ -408,5 +442,6 @@ export default class GameManager {
 
   resetGame() {
     this.engine.ConsolePrint('resetting game\n');
+    // TODO: resetting game
   }
 };

@@ -107,17 +107,16 @@ export default class ShalrathMonsterEntity extends WalkMonster {
     this._defineState('shal_death7', 'death7', null, function () {});
   }
 
-  _precache() {
-    super._precache();
+  static _precache(engineAPI) {
+    super._precache(engineAPI);
 
-    this.engine.PrecacheModel('progs/v_spike.mdl');
-
-    this.engine.PrecacheSound('shalrath/attack.wav');
-    this.engine.PrecacheSound('shalrath/attack2.wav');
-    this.engine.PrecacheSound('shalrath/death.wav');
-    this.engine.PrecacheSound('shalrath/idle.wav');
-    this.engine.PrecacheSound('shalrath/pain.wav');
-    this.engine.PrecacheSound('shalrath/sight.wav');
+    engineAPI.PrecacheModel('progs/v_spike.mdl');
+    engineAPI.PrecacheSound('shalrath/attack.wav');
+    engineAPI.PrecacheSound('shalrath/attack2.wav');
+    engineAPI.PrecacheSound('shalrath/death.wav');
+    engineAPI.PrecacheSound('shalrath/idle.wav');
+    engineAPI.PrecacheSound('shalrath/pain.wav');
+    engineAPI.PrecacheSound('shalrath/sight.wav');
   }
 
   thinkDie() {

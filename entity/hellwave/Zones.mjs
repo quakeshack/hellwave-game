@@ -1,7 +1,7 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { moveType, solid } from '../../Defs.mjs';
 import BaseEntity from '../BaseEntity.mjs';
-import { DebugMarkerEntity, LightEntity } from '../Misc.mjs';
+import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../Misc.mjs';
 import PlayerEntity from '../hellwave/Player.mjs';
 import { BaseTriggerEntity } from '../Triggers.mjs';
 import { WallEntity } from './Props.mjs';
@@ -84,6 +84,8 @@ export class BuyZoneEntity extends BaseTriggerEntity {
         const spawnpoint = spawnzones.spawnpoints[i - 1];
 
         player.setOrigin(spawnpoint);
+
+        this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin: spawnpoint });
       }
     }
   }
@@ -137,9 +139,11 @@ export class MonstersSpawnZoneEntity extends BaseEntity {
       for (let y = this.mins[1] + 40.0; y <= this.maxs[1]; y += 80.0) {
         const origin = new Vector(x, y, this.mins[2] + 24.0);
 
-        this.engine.SpawnEntity(DebugMarkerEntity.classname, {
-          origin,
-        });
+        if (this.game.debug_spawnpoints) {
+          this.engine.SpawnEntity(DebugMarkerEntity.classname, {
+            origin,
+          });
+        }
 
         this.game.manager.spawnpoints.push(origin); // TODO: register available height too
       }
@@ -176,9 +180,11 @@ export class PlayersSpawnZoneEntity extends BaseEntity {
       for (let y = this.mins[1] + 40.0; y <= this.maxs[1]; y += 80.0) {
         const origin = new Vector(x, y, this.mins[2] + 24.0);
 
-        this.engine.SpawnEntity(DebugMarkerEntity.classname, {
-          origin,
-        });
+        if (this.game.debug_spawnpoints) {
+          this.engine.SpawnEntity(DebugMarkerEntity.classname, {
+            origin,
+          });
+        }
 
         this.spawnpoints.push(origin); // TODO: register available height too
       }

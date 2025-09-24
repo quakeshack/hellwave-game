@@ -1,16 +1,25 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { channel, clientEvent, flags, items, moveType } from '../../Defs.mjs';
 import { phases } from '../../GameManager.mjs';
-import { BackpackEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher } from '../Items.mjs';
+import { BackpackEntity, HealthItemEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
 import { Backpack } from '../Weapons.mjs';
 
 export const buyMenuItems = {
-  1: { cost: 200, label: 'Shotgun', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 10 } },
-  2: { cost: 300, label: 'Nailgun', entityClass: WeaponNailgun },
-  3: { cost: 500, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
-  4: { cost: 500, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
-  5: { cost: 100, label: 'Light Armor', entityClass: LightArmorEntity },
+  1: { cost: 100, label: 'Armor', entityClass: LightArmorEntity },
+
+  2: { cost: 200, label: 'Shotgun', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 10 } },
+  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun },
+
+  4: { cost: 1000, label: 'Nailgun', entityClass: WeaponNailgun },
+  5: { cost: 3000, label: 'Super Nailgun', entityClass: WeaponSuperNailgun },
+
+  6: { cost: 5000, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
+  7: { cost: 5000, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
+
+  8: { cost: 8000, label: 'Thunderbolt', entityClass: WeaponThunderbolt },
+
+  9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
 };
 
 export default class HellwavePayer extends PlayerEntity {
@@ -24,6 +33,16 @@ export default class HellwavePayer extends PlayerEntity {
     ...PlayerEntity.clientdataFields,
     'buyzone',
   ];
+
+  _playerDeathThink() {
+    if (this.game.manager.phase !== phases.quiet) {
+      this.button0 = false;
+      this.button1 = false;
+      this.button2 = false;
+    }
+
+    super._playerDeathThink();
+  }
 
   _declareFields() {
     super._declareFields();
@@ -148,7 +167,7 @@ export default class HellwavePayer extends PlayerEntity {
         break;
     }
 
-    if (this.buyzone === 2 && this.impulse > 0 && this.impulse < 9) {
+    if (this.buyzone === 2 && this.impulse > 0 && this.impulse <= 9) {
       this._buyMenuPurchase(this.impulse);
       this.impulse = 0;
     }
@@ -203,6 +222,7 @@ export default class HellwavePayer extends PlayerEntity {
       this.engine.SpawnEntity(menuItem.entityClass.classname, {
         origin: this.origin.copy(),
         angles: this.angles.copy(),
+        spawnflags: menuItem.spawnflags || 0,
       });
     }
   }

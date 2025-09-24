@@ -30,6 +30,7 @@ import * as zones from './entity/hellwave/Zones.mjs';
 import GameManager, { phases } from './GameManager.mjs';
 import * as hwProps from './entity/hellwave/Props.mjs';
 import HellwavePayer from './entity/hellwave/Player.mjs';
+import Cvar from '../../engine/common/Cvar.mjs';
 
 /** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
 /** @typedef {import("../../engine/common/Cvar.mjs").default} Cvar */
@@ -206,6 +207,8 @@ const cvars = {
   rounds: null,
   quiettime: null,
   normaltime: null,
+  maxmonstersalive: null,
+  debug_spawnpoints: null,
 };
 
 /**
@@ -474,6 +477,14 @@ export class ServerGameAPI {
     return cvars.normaltime.value;
   }
 
+  get maxmonstersalive() {
+    return cvars.maxmonstersalive.value;
+  }
+
+  get debug_spawnpoints() {
+    return cvars.debug_spawnpoints.value;
+  }
+
   hasFeature(feature) {
     return featureFlags.includes(feature);
   }
@@ -516,8 +527,12 @@ export class ServerGameAPI {
   PutClientInServer(clientEdict) {
     const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
     playerEntity.putPlayerInServer();
+  }
 
-    this.manager.putPlayerInServer(playerEntity);
+  ClientBegin(clientEdict) {
+    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
+
+    this.manager.clientBeing(playerEntity);
   }
 
   /**
@@ -693,8 +708,10 @@ export class ServerGameAPI {
 
     // hellwave specific cvars
     cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
-    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '10', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
-    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '60', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
+    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '30', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '45', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
+    cvars.maxmonstersalive = ServerEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
+    cvars.debug_spawnpoints = ServerEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', Cvar.FLAG.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');
 
     // initialize all entity classes
     for (const entityClass of entityRegistry.values()) {
