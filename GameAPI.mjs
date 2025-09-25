@@ -235,6 +235,7 @@ class GameStats {
     this.round_total = 0;
     this.squad_standing = 0;
     this.squad_total = 0;
+    this.round_monsters_limit = 0;
     /** @type {keyof typeof phases} */
     this.phase = phases.waiting;
     this.phase_ending_time = 0; // game.time + X, in seconds
@@ -257,22 +258,20 @@ class GameStats {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', ++this.monsters_killed, attackerEntity.edict);
     });
 
-    this.engine.eventBus.subscribe('game.round.started', (roundNumber, roundTotal) => {
+    this.engine.eventBus.subscribe('game.round.started', (roundNumber, roundTotal, roundMonstersLimit) => {
       this.round_current = roundNumber;
       this.round_total = roundTotal;
+      this.round_monsters_limit = roundMonstersLimit;
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_current', this.round_current);
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_total', this.round_total);
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_monsters_limit', this.round_monsters_limit);
 
       // reset stats
       this.monsters_total = 0;
       this.monsters_killed = 0;
-      this.secrets_total = 0;
-      this.secrets_found = 0;
 
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', this.monsters_total);
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', this.monsters_killed);
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_total', this.secrets_total);
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_found', this.secrets_found);
     });
 
     this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
@@ -318,6 +317,7 @@ class GameStats {
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_total', this.squad_total);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase', this.phase);
     this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase_ending_time', this.phase_ending_time);
+    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_monsters_limit', this.round_monsters_limit);
   }
 };
 

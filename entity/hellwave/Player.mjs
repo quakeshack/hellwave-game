@@ -1,5 +1,5 @@
 import Vector from '../../../../shared/Vector.mjs';
-import { channel, clientEvent, flags, items, moveType } from '../../Defs.mjs';
+import { channel, clientEvent, flags, items, moveType, solid } from '../../Defs.mjs';
 import { phases } from '../../GameManager.mjs';
 import { BackpackEntity, HealthItemEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
@@ -27,21 +27,40 @@ export default class HellwavePayer extends PlayerEntity {
     ...PlayerEntity.clientEntityFields,
     'money',
     'health',
+    'spectating',
   ];
 
   static clientdataFields = [
     ...PlayerEntity.clientdataFields,
     'buyzone',
+    'spectating',
   ];
 
-  _playerDeathThink() {
-    if (this.game.manager.phase !== phases.quiet) {
-      this.button0 = false;
-      this.button1 = false;
-      this.button2 = false;
-    }
+  // _playerDeathThink() {
+  //   if (this.game.manager.phase !== phases.quiet) {
+  //     this.button0 = false;
+  //     this.button1 = false;
+  //     this.button2 = false;
+  //   }
 
-    super._playerDeathThink();
+  //   super._playerDeathThink();
+  // }
+
+  _respawn() {
+    switch (this.game.manager.phase) {
+      case phases.quiet:
+        super._respawn();
+        break;
+
+      case phases.normal:
+      case phases.action:
+        this._spectate();
+        break;
+
+      case phases.gameover:
+        // trigger next map?
+        break;
+    }
   }
 
   _declareFields() {
@@ -52,6 +71,7 @@ export default class HellwavePayer extends PlayerEntity {
     /** @type {-1|0|1|2} -1 – not allowed, 0 – outside the zone, 1 – inside the zone, 2 – inside the buy menu */
     this.buyzone = 0;
     this.buyzone_time = 0;
+    this.spectating = false;
     this._serializer.endFields();
   }
 
@@ -72,11 +92,20 @@ export default class HellwavePayer extends PlayerEntity {
   _spectate() {
     this.flags |= flags.FL_FLY | flags.FL_NOTARGET;
     this.movetype = moveType.MOVETYPE_NOCLIP;
-    this.unsetModel(true);
+    this.solid = solid.SOLID_NOT;
+    this.unsetModel(false);
 
     this.weapon = 0;
+    this.spectating = true;
   }
 
+  _unspectate() {
+    this.flags &= ~(flags.FL_FLY | flags.FL_NOTARGET);
+
+    this.clear();
+
+    this.spectating = false;
+  }
 
   /** @protected */
   _dropBackpack() {
@@ -140,6 +169,15 @@ export default class HellwavePayer extends PlayerEntity {
     this.money = 1000;
   }
 
+  disconnected() {
+    if (!this.spectating) {
+      super.disconnected();
+      return;
+    }
+
+    this.engine.BroadcastPrint(`${this.netname} left the game.\n`);
+  }
+
   putPlayerInServer() {
     // select spawn spot
     const spot = this._selectSpawnPoint();
@@ -151,7 +189,11 @@ export default class HellwavePayer extends PlayerEntity {
     this.game.stats.sendToPlayer(this);
     this.updateMoney();
 
-    // this._spectate();
+    if (this.game.manager.phase !== phases.quiet && this.game.manager.phase !== phases.waiting) {
+      this._spectate();
+    } else {
+      this._unspectate();
+    }
   }
 
   _handleImpulseCommands() {
@@ -173,6 +215,14 @@ export default class HellwavePayer extends PlayerEntity {
     }
 
     super._handleImpulseCommands();
+  }
+
+  _weaponFrame() {
+    if (this.spectating) {
+      return; // no weapon handling while spectating
+    }
+
+    super._weaponFrame();
   }
 
   _buyMenuRequested() {

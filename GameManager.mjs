@@ -89,7 +89,7 @@ export default class GameManager {
     this.phase_ending_time = 0; // game.time + X, in seconds
 
     this.round_number = 0;
-    this.round_number_limit = Infinity;
+    this.round_number_limit = 0;
 
     /** @type {number} how many monsters to spawn within this round */
     this.round_monsters_limit = 0;
@@ -324,11 +324,22 @@ export default class GameManager {
     const start = 20, end = 200;
     const ratio = Math.pow(start / end, 1 / (this.round_number_limit - 1));
 
-    this.round_monsters_limit = start * Math.pow(ratio, this.round_number - 1) * clients;
+    this.round_monsters_limit = start + Math.floor(start * Math.pow(ratio, this.round_number - 1) * clients);
 
-    this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit);
+    this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
 
     this.startQuietPhase();
+
+    // make sure that we spawn all spectating players
+    for (const clent of this.engine.GetClients()) {
+      const player = /** @type {HellwavePayer} */(clent.entity);
+
+      if (!player.spectating) {
+        continue; // not spectating
+      }
+
+      player.putPlayerInServer();
+    }
   }
 
   startQuietPhase() {
@@ -392,13 +403,13 @@ export default class GameManager {
         this.startNextRound();
       // eslint-disable-next-line no-fallthrough
       case phases.quiet:
-        // TODO: regular spawn
+        // regular spawn
         break;
 
       case phases.normal:
       case phases.action:
       case phases.gameover:
-        // TODO: spawn as spectator
+        // spawn as spectator
         break;
     }
   }
@@ -407,11 +418,15 @@ export default class GameManager {
     let squadTotal = 0, squadStanding = 0;
 
     for (const clientEdict of this.engine.GetClients()) {
-      /** @type {PlayerEntity} */
+      /** @type {HellwavePayer} */
       const player = clientEdict.entity;
 
       if (skipPlayerEntity && player.equals(skipPlayerEntity)) {
         continue; // skip the leaving player
+      }
+
+      if (player.spectating) {
+        continue; // skip spectators
       }
 
       squadTotal++;
@@ -423,7 +438,7 @@ export default class GameManager {
       squadStanding++;
     }
 
-    this.game.stats.updateSquadStats(squadStanding, squadTotal);
+    this.game.stats.updateSquadStats(squadStanding, squadTotal); // TODO: turn into an event
 
     if (squadTotal <= 0) {
       this.engine.ConsolePrint('no players left in the game\n');
@@ -443,5 +458,6 @@ export default class GameManager {
   resetGame() {
     this.engine.ConsolePrint('resetting game\n');
     // TODO: resetting game
+    this.engine.AppendConsoleText('restart\n');
   }
 };

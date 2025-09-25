@@ -26,6 +26,8 @@ export class ClientGameAPI {
 
     money: 0,
     buyzone: 0,
+
+    spectating: false,
   };
 
   /** @type {Record<string, string>} server cvar values */
@@ -85,7 +87,7 @@ export class ClientGameAPI {
   }
 
   startFrame() {
-    if (this.clientdata.health <= 0 || !this.clientdata.weapon || (this.clientdata.items & items.IT_INVISIBILITY)) {
+    if (this.clientdata.health <= 0 || !this.clientdata.weapon || (this.clientdata.items & items.IT_INVISIBILITY) || this.clientdata.spectating) {
       this.viewmodel.visible = false;
     } else {
       this.viewmodel.visible = true;

@@ -224,6 +224,7 @@ export default class HUD {
     round_current: 0,
     squad_total: 0,
     squad_standing: 0,
+    round_monsters_limit: 0,
     /** @type {keyof typeof phases?} */
     phase: null,
     phase_ending_time: 0, // game.time + X, in seconds
@@ -500,12 +501,18 @@ export default class HUD {
 
     for (let i = 0; i < scores.length; i++) {
       const score = scores[i];
+      const isSpectator = score.entity.extended.spectating;
       // const money = +score.entity.extended.money || 0;
       const health = Math.max(0, +score.entity.extended.health || 0);
 
       this.overlay.drawRect(x + 8, y + 24 * i + 8, 80, 8, this.engine.IndexToRGB((score.colors & 0xf0) + 8));
       this.overlay.drawRect(x + 8, y + 24 * i + 16, 80, 8, this.engine.IndexToRGB((score.colors & 0xf) * 16 + 8));
-      this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} ${`${health.toFixed(0)} HP`.padStart(5)} ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
+
+      if (isSpectator) {
+        this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} SPECTATE ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
+      } else {
+        this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} ${`${health.toFixed(0)} HP`.padStart(5)} ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
+      }
     }
 
     y += this.overlay.height - 88;
@@ -590,6 +597,10 @@ export default class HUD {
       return; // no money to display
     }
 
+    if (this.stats.phase !== phases.quiet) {
+      return; // only show money in quiet phase
+    }
+
     const color = new Vector(1.0, 1.0, 1.0);
 
     if (this.inventory.money[0] !== null) {
@@ -603,19 +614,22 @@ export default class HUD {
       }
       this.sbar.drawString(0, -48, `Q${newBalance}`, 2.0, color);
     }
-
-    this.#drawBuyMenu();
   }
 
   #drawRoundStats() {
-    const string = `${this.stats.round_current} / ${this.stats.round_total}`;
-    this.sbar.drawString(this.sbar.width - string.length * 16, -48, string, 2.0);
-
     // in quiet phase, we show the timer
     if (this.stats.phase === phases.quiet) {
-      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.gametime), 2.0);
+      const roundString = `${this.stats.round_current} / ${this.stats.round_total}`;
+      this.sbar.drawString(this.sbar.width - roundString.length * 16, -48, roundString, 2.0);
+
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -80, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.gametime), 2.0);
     } else {
-      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -64, phases[this.stats.phase] || '', 2.0);
+      if (this.stats.phase === phases.normal || this.stats.phase === phases.action) {
+        const waveString = `${this.stats.monsters_killed} / ${this.stats.round_monsters_limit}`;
+        this.sbar.drawString(this.sbar.width - waveString.length * 16, -80, waveString, 2.0);
+      }
+
+      this.sbar.drawString(0, -80, phases[this.stats.phase] || '', 2.0);
     }
   }
 
@@ -649,6 +663,7 @@ export default class HUD {
 
     this.#drawAccountBalance();
     this.#drawRoundStats();
+    this.#drawBuyMenu();
   }
 
   #powerupFlash() {
