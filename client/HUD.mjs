@@ -659,7 +659,11 @@ export default class HUD {
       this.#drawInventory(-24);
     }
 
-    this.#drawStatusBar();
+    if (this.game.clientdata.spectating) {
+      // TODO: show spectator info, indicating the player is spectating
+    } else {
+      this.#drawStatusBar();
+    }
 
     this.#drawAccountBalance();
     this.#drawRoundStats();
