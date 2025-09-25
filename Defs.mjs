@@ -205,6 +205,9 @@ export const clientEvent = {
   /** update  */
   ROUND_PHASE: 202,
 
+  /** navigation hint */
+  NAV_HINT: 203,
+
   /** test event, args: some gargabe */
   TEST_EVENT: 254,
 };

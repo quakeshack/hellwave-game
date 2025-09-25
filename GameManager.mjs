@@ -1,4 +1,5 @@
 import Vector from '../../shared/Vector.mjs';
+import { clientEvent, clientEventName } from './Defs.mjs';
 import HellwavePayer from './entity/hellwave/Player.mjs';
 import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
 import { TeleportEffectEntity } from './entity/Misc.mjs';
@@ -94,30 +95,39 @@ export default class GameManager {
     /** @type {number} how many monsters to spawn within this round */
     this.round_monsters_limit = 0;
 
+    /** @type {number} timer to send out hints to get to the buyzone */
+    this.next_hint_time = 0;
+
+    /** @type {BuyZoneEntity?} randomly selected buy zone during quiet phase */
+    this.designed_buyzone = null;
+
     this._serializer.endFields();
   }
 
   openRandomShop() {
-    const zones = Array.from(this.engine.FindAllByFieldAndValue('classname', BuyZoneEntity.classname));
+    const zones = Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity));
 
     /** @type {BuyZoneEntity?} */
     const zone = zones[Math.floor(Math.random() * zones.length)]?.entity;
 
     if (zone) {
       zone.openShop();
+      this.designed_buyzone = zone;
     }
 
-    this.engine.BroadcastPrint('Store is open!\n');
+    this.engine.BroadcastPrint('Store is open!\n'); // TODO: publish client event
   }
 
   closeShops() {
-    for (const entity of this.engine.FindAllByFieldAndValue('classname', BuyZoneEntity.classname)) {
+    for (const entity of this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity)) {
       /** @type {BuyZoneEntity} */
       const zone = entity.entity;
       zone.closeShop();
     }
 
-    this.engine.BroadcastPrint('Store is closed!\n');
+    this.designed_buyzone = null;
+
+    this.engine.BroadcastPrint('Store is closed!\n'); // TODO: publish client event
   }
 
   subscribeToEvents() {
@@ -131,11 +141,17 @@ export default class GameManager {
 
     this.engine.eventBus.subscribe('game.player.died', (player, attacker) => {
       this.checkSquadStatus(null);
+
+      // friendly fire money penalty
+      if (attacker instanceof HellwavePayer && attacker !== player) {
+        attacker.updateMoney(-500);
+      }
     });
 
     this.engine.eventBus.subscribe('game.monster.killed', (monster, attacker) => {
       if (attacker instanceof HellwavePayer) {
         attacker.updateMoney(100); // TODO: different money for different monsters
+        attacker.frags++;
       }
     });
   }
@@ -258,6 +274,28 @@ export default class GameManager {
     this.assessGameState();
   }
 
+  showNavigationBuyzoneHint() {
+    if (!this.designed_buyzone) {
+      return; // no buyzone to go to
+    }
+
+    for (const clientEdict of this.engine.GetClients()) {
+      /** @type {HellwavePayer} */
+      const player = clientEdict.entity;
+
+      if (player.spectating || player.buyzone) {
+        continue; // skip spectators and players already in the buyzone
+      }
+
+      const start = player.origin.copy();
+      const end = this.designed_buyzone.centerPoint.copy();
+
+      const path = this.engine.Navigate(start, end).map((v) => v.add(player.view_ofs));
+
+      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...path);
+    }
+  }
+
   /**
    * Assess the current game state and make changes if necessary.
    * In this method we have all rules and checks that need to be done every frame.
@@ -268,6 +306,10 @@ export default class GameManager {
         if (this.phase_ending_time <= this.game.time) {
           // TODO: better event to the players
           this.startNormalPhase();
+        }
+        if (this.next_hint_time <= this.game.time) {
+          this.showNavigationBuyzoneHint();
+          this.next_hint_time = this.game.time + 5.0;
         }
         break;
 
@@ -322,9 +364,9 @@ export default class GameManager {
     const clients = Array.from(this.engine.GetClients()).length;
 
     const start = 20, end = 200;
-    const ratio = Math.pow(start / end, 1 / (this.round_number_limit - 1));
+    const ratio = (this.round_number - 1) / (this.round_number_limit - 1);
 
-    this.round_monsters_limit = start + Math.floor(start * Math.pow(ratio, this.round_number - 1) * clients);
+    this.round_monsters_limit = start + Math.floor((end - start) * ratio * clients);
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
 

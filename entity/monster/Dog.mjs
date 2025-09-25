@@ -36,7 +36,7 @@ export default class DogMonsterEntity extends WalkMonster {
   static classname = 'monster_dog';
 
   static _health = 25;
-  static _size = [new Vector(-32.0, -32.0, -24.0), new Vector(32.0, 32.0, 40.0)];
+  static _size = [new Vector(-16.0, -16.0, -24.0), new Vector(16.0, 16.0, 40.0)];
 
   static _modelDefault = 'progs/dog.mdl';
   static _modelHead = 'progs/h_dog.mdl';

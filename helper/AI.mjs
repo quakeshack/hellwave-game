@@ -274,9 +274,11 @@ export class QuakeEntityAI extends EntityAI {
 
     if (this._game.time > this._enemyMetadata.nextKnownOriginTime && this._enemyMetadata.isVisible) {
       this._enemyMetadata.nextKnownOriginTime = this._game.time + 10.0;
-      this._enemyMetadata.nextPathUpdateTime = 0.0; // force path update
+      if (this._gameAI._sightEntityLastOrigin.distanceTo(this._entity.enemy.origin) > 256.0) {
+        this._enemyMetadata.nextPathUpdateTime = 0.0; // force path update
+      }
       this._gameAI._sightEntityLastOrigin.set(this._entity.enemy.origin);
-      console.debug(`${this._entity} updated sight of enemy ${this._entity.enemy}, will search again in 10 seconds`);
+      console.debug(`${this._entity} updated sight of enemy ${this._entity.enemy}, will search again later`);
     }
 
     if (this._game.time > this._enemyMetadata.nextPathUpdateTime && !this._gameAI._sightEntityLastOrigin.isOrigin()) {

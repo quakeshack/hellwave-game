@@ -2,6 +2,7 @@
 /** @typedef {import('../../../shared/GameInterfaces').ClientGameInterface} ClientGameInterface  */
 /** @typedef {import('../../../shared/GameInterfaces').SerializableType} SerializableType */
 
+import sampleBSpline from '../../../shared/BSpline.mjs';
 import { clientEvent, clientEventName, items } from '../Defs.mjs';
 import { weaponConfig } from '../entity/Weapons.mjs';
 import { entityRegistry } from '../GameAPI.mjs';
@@ -79,6 +80,14 @@ export class ClientGameAPI {
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.OBITUARY), (...args) => {
       console.log('OBITUARY event received', args);
+    });
+
+    this.engine.eventBus.subscribe(clientEventName(clientEvent.NAV_HINT), (...waypoints) => {
+      const points = sampleBSpline(waypoints, 200);
+
+      for (let i = 1; i < points.length; i++) {
+        this.engine.RocketTrail(points[i-1], points[i], 1);
+      }
     });
   }
 

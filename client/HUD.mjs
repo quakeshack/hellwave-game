@@ -626,10 +626,10 @@ export default class HUD {
     } else {
       if (this.stats.phase === phases.normal || this.stats.phase === phases.action) {
         const waveString = `${this.stats.monsters_killed} / ${this.stats.round_monsters_limit}`;
-        this.sbar.drawString(this.sbar.width - waveString.length * 16, -80, waveString, 2.0);
+        this.sbar.drawString(this.sbar.width - waveString.length * 16, -48, waveString, 2.0);
       }
 
-      this.sbar.drawString(0, -80, phases[this.stats.phase] || '', 2.0);
+      this.sbar.drawString(0, -48, phases[this.stats.phase] || '', 2.0);
     }
   }
 

@@ -109,6 +109,8 @@ export default class HellwavePayer extends PlayerEntity {
 
   /** @protected */
   _dropBackpack() {
+    const moneyToDrop = Math.min(300, this.money);
+
     const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
       origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)),
       items: this.weapon,
@@ -116,7 +118,7 @@ export default class HellwavePayer extends PlayerEntity {
       ammo_nails: this.ammo_nails,
       ammo_rockets: this.ammo_rockets,
       ammo_shells: this.ammo_shells,
-      money: this.money, // Balancing: should we really drop money or only a little?
+      money: moneyToDrop,
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
     }));
@@ -125,8 +127,9 @@ export default class HellwavePayer extends PlayerEntity {
     this.ammo_nails = 0;
     this.ammo_rockets = 0;
     this.ammo_shells = 0;
-    this.money = 0;
     this.items &= ~this.weapon | items.IT_AXE;
+
+    this.updateMoney(-moneyToDrop);
 
     // toss it around
     backpack.toss();
