@@ -74,6 +74,7 @@ export default class ZombieMonster extends WalkMonster {
     this._serializer.startFields();
     this.inpain = 0;
     this.pain_finished = 0;
+    this.standups = 0;
     this._serializer.endFields();
   }
 
@@ -343,7 +344,10 @@ export default class ZombieMonster extends WalkMonster {
   }
 
   _standUp() {
-    this.health = 60;
+    if (this.standups-- > 0) {
+      this.health = 60;
+    }
+
     this.startSound(channel.CHAN_BODY, 'zombie/z_idle.wav', 1.0, attn.ATTN_IDLE);
     this.solid = solid.SOLID_SLIDEBOX;
 
@@ -392,13 +396,17 @@ export default class ZombieMonster extends WalkMonster {
       return;
     }
 
+    this.standups = Math.ceil(Math.random() * 10) + 5;
+
     super._postSpawn();
   }
 
   // pain reaction
   thinkPain(attackerEntity, damage) {
-    // always reset health to max
-    this.health = /** @type {typeof ZombieMonster} */(this.constructor)._health;
+    if (this.standups-- > 0) {
+      // always reset health to max
+      this.health = /** @type {typeof ZombieMonster} */(this.constructor)._health;
+    }
 
     // ignore small hits
     if (damage < 9) {

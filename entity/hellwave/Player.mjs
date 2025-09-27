@@ -8,11 +8,11 @@ import { Backpack } from '../Weapons.mjs';
 export const buyMenuItems = {
   1: { cost: 100, label: 'Armor', entityClass: LightArmorEntity },
 
-  2: { cost: 200, label: 'Shotgun', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 10 } },
+  2: { cost: 200, label: 'Shotgun / 20 shells', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 } },
   3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun },
 
   4: { cost: 1000, label: 'Nailgun', entityClass: WeaponNailgun },
-  5: { cost: 3000, label: 'Super Nailgun', entityClass: WeaponSuperNailgun },
+  5: { cost: 3000, label: 'Super Nailgun (+ 50 nails)', entityClass: WeaponSuperNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 50 } },
 
   6: { cost: 5000, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
   7: { cost: 5000, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
@@ -263,13 +263,6 @@ export default class HellwavePayer extends PlayerEntity {
     // take the money
     this.updateMoney(-menuItem.cost);
 
-    // apply backpack
-    if (menuItem.backpack) {
-      if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
-        this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
-      }
-    }
-
     // spawn entity to pick up
     if (menuItem.entityClass) {
       this.engine.SpawnEntity(menuItem.entityClass.classname, {
@@ -277,6 +270,13 @@ export default class HellwavePayer extends PlayerEntity {
         angles: this.angles.copy(),
         spawnflags: menuItem.spawnflags || 0,
       });
+    }
+
+    // apply backpack
+    if (menuItem.backpack) {
+      if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
+        this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
+      }
     }
   }
 

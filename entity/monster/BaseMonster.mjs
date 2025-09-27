@@ -4,9 +4,9 @@ import { damage, moveType, solid, range, colors, flags } from '../../Defs.mjs';
 import { EntityAI, ATTACK_STATE } from '../../helper/AI.mjs';
 import BaseEntity from '../BaseEntity.mjs';
 import { BackpackEntity } from '../Items.mjs';
-import { GibEntity } from '../Player.mjs';
+import { GibEntity, PlayerEntity } from '../Player.mjs';
 import { Sub } from '../Subs.mjs';
-import { DamageHandler } from '../Weapons.mjs';
+import { Backpack, DamageHandler } from '../Weapons.mjs';
 
 export default class BaseMonster extends BaseEntity {
   /** @type {number} health points */

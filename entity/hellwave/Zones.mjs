@@ -5,6 +5,7 @@ import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../Misc.mj
 import PlayerEntity from '../hellwave/Player.mjs';
 import { BaseTriggerEntity } from '../Triggers.mjs';
 import { WallEntity } from './Props.mjs';
+import { phases } from '../../GameManager.mjs';
 
 /**
  * QUAKED func_buyzone (0.5 0 0.5) ?
@@ -21,6 +22,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     this._serializer.startFields();
     /** @type {number[]} */
     this._playerInsideTime = [];
+    this.isOpen = false;
     this._serializer.endFields();
   }
 
@@ -35,12 +37,16 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     other.buyzone_time = this.game.time;
 
     this._playerInsideTime[other.edictId] = this.game.time;
+
+    if (this.game.manager.phase !== phases.quiet) {
+      this.#teleportPlayerOutOfBuyzone(other);
+    }
   }
 
   *#getConnectedLights() {
     for (const entity of this.findAllEntitiesByFieldAndValue('targetname', this.target)) {
       if (entity instanceof LightEntity) {
-        yield entity;
+        yield /** @type {LightEntity} */(entity);
       }
     }
   }
@@ -48,7 +54,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
   *#getConnectedShutters() {
     for (const entity of this.findAllEntitiesByFieldAndValue('targetname', this.target)) {
       if (entity instanceof BuyZoneShuttersEntity) {
-        yield entity;
+        yield /** @type {BuyZoneShuttersEntity} */(entity);
       }
     }
   }
@@ -56,12 +62,30 @@ export class BuyZoneEntity extends BaseTriggerEntity {
   *#getPlayerSpawnzones() {
     for (const entity of this.findAllEntitiesByFieldAndValue('targetname', this.target)) {
       if (entity instanceof PlayersSpawnZoneEntity) {
-        yield entity;
+        yield /** @type {PlayersSpawnZoneEntity} */(entity);
       }
     }
   }
 
+  /** @param {PlayerEntity} player player */
+  #teleportPlayerOutOfBuyzone(player) {
+    const spawnzones = Array.from(this.#getPlayerSpawnzones())[0];
+
+    if (!spawnzones) {
+      this.engine.ConsoleWarning('no spawnzones found, cannot kick players out of buyzone\n');
+      return;
+    }
+
+    const spawnpoint = spawnzones.spawnpoints[player.edictId - 1];
+
+    player.setOrigin(spawnpoint);
+
+    this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin: spawnpoint });
+  }
+
   closeShop() {
+    this.isOpen = false;
+
     for (const light of this.#getConnectedLights()) {
       light.off();
     }
@@ -98,6 +122,8 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     for (const shutter of this.#getConnectedShutters()) {
       shutter.hide();
     }
+
+    this.isOpen = true;
   }
 
   spawn() {
@@ -119,9 +145,39 @@ export class BuyZoneEntity extends BaseTriggerEntity {
 /**
  * QUAKED func_buyzone_shutters (0.5 0 0.5) ?
  * Buyzone shutters. Will close when the round starts.
+ *
+ * style: 0 - default, shutters are closed when the buyzone is closed
+ *        1 - inverted, shutters are closed when the buyzone is open
  */
 export class BuyZoneShuttersEntity extends WallEntity {
   static classname = 'func_buyzone_shutters';
+
+  static STYLE_DEFAULT = 0;
+  static STYLE_INVERTED = 1;
+
+  _declareFields() {
+    super._declareFields();
+
+    this._serializer.startFields();
+    this.style = 0;
+    this._serializer.endFields();
+  }
+
+  show() {
+    if (this.style === BuyZoneShuttersEntity.STYLE_DEFAULT) {
+      super.show();
+    } else {
+      super.hide();
+    }
+  }
+
+  hide() {
+    if (this.style === BuyZoneShuttersEntity.STYLE_DEFAULT) {
+      super.hide();
+    } else {
+      super.show();
+    }
+  }
 };
 
 /**
@@ -191,5 +247,8 @@ export class PlayersSpawnZoneEntity extends BaseEntity {
     }
 
     console.assert(this.spawnpoints.length >= this.engine.maxplayers, 'have at least maxplayers spawnpoints');
+
+    // no longer needed, we sampled the spawnpoints
+    this.unsetModel(false);
   }
 };

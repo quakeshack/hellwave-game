@@ -708,8 +708,8 @@ export class ServerGameAPI {
 
     // hellwave specific cvars
     cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
-    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '30', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
-    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '45', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
+    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     cvars.maxmonstersalive = ServerEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
     cvars.debug_spawnpoints = ServerEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', Cvar.FLAG.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');
 

@@ -1,6 +1,6 @@
 import Vector from '../../../../shared/Vector.mjs';
 
-import { attn, channel, solid } from '../../Defs.mjs';
+import { attn, channel, items, solid } from '../../Defs.mjs';
 import { QuakeEntityAI } from '../../helper/AI.mjs';
 import { GibEntity } from '../Player.mjs';
 import { Grenade } from '../Weapons.mjs';
@@ -280,7 +280,7 @@ export default class OgreMonsterEntity extends WalkMonster {
   }
 
   _dropBackpack() {
-    super._dropBackpack({ ammo_rockets: 2 });
+    super._dropBackpack({ ammo_rockets: 2, items: items.IT_GRENADE_LAUNCHER | items.IT_ROCKETS });
   }
 
   // eslint-disable-next-line no-unused-vars

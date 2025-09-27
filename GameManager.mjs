@@ -1,7 +1,8 @@
 import Vector from '../../shared/Vector.mjs';
-import { clientEvent, clientEventName } from './Defs.mjs';
+import { clientEvent, items } from './Defs.mjs';
 import HellwavePayer from './entity/hellwave/Player.mjs';
 import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
+import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from './entity/Items.mjs';
 import { TeleportEffectEntity } from './entity/Misc.mjs';
 import BaseMonster from './entity/monster/BaseMonster.mjs';
 import DogMonsterEntity from './entity/monster/Dog.mjs';
@@ -54,16 +55,16 @@ const gameRoundMonsterMatrix = {
     { classname: ZombieMonster.classname, probability: 0.5 },
     { classname: KnightMonster.classname, probability: 1.0 },
     { classname: HellKnightMonster.classname, probability: 0.5 },
-    { classname: ArmySoldierMonster.classname, probability: 0.2 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
   ],
   5: [
     { classname: WizardMonsterEntity.classname, probability: 0.3 },
     { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 1.0 },
-    { classname: ShalrathMissileEntity.classname, probability: 0.7 },
-    { classname: ZombieMonster.classname, probability: 0.2 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
+    { classname: ShalrathMissileEntity.classname, probability: 0.7, limit: 3 },
+    { classname: ZombieMonster.classname, probability: 0.2, limit: 3 },
     { classname: HellKnightMonster.classname, probability: 1.0 },
-    { classname: ArmySoldierMonster.classname, probability: 0.3 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
     { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
   ],
 };
@@ -101,10 +102,23 @@ export default class GameManager {
     /** @type {BuyZoneEntity?} randomly selected buy zone during quiet phase */
     this.designed_buyzone = null;
 
+    /** @type {number} maximum amount of goodies (health, ammo, etc.) to drop when monsters die */
+    this.available_goodies = 0;
+
+    /** @type {number} maximum amount of quad damage powerups to drop when monsters die */
+    this.available_goodies_quad = 0;
+
+    /** @type {boolean} whether to initialize game state */
+    this.gameInitialized = false;
+
     this._serializer.endFields();
   }
 
   openRandomShop() {
+    if (this.designed_buyzone) {
+      return; // already open
+    }
+
     const zones = Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity));
 
     /** @type {BuyZoneEntity?} */
@@ -119,9 +133,9 @@ export default class GameManager {
   }
 
   closeShops() {
-    for (const entity of this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity)) {
+    for (const edict of Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity))) {
       /** @type {BuyZoneEntity} */
-      const zone = entity.entity;
+      const zone = edict.entity;
       zone.closeShop();
     }
 
@@ -134,7 +148,7 @@ export default class GameManager {
     this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
       if (newPhase === phases.quiet) {
         this.openRandomShop();
-      } else {
+      } else if (newPhase === phases.normal) {
         this.closeShops();
       }
     });
@@ -152,8 +166,55 @@ export default class GameManager {
       if (attacker instanceof HellwavePayer) {
         attacker.updateMoney(100); // TODO: different money for different monsters
         attacker.frags++;
+
+        if (Math.random() < 0.2 && this.available_goodies > 0) {
+          this.dropGoodie(monster, attacker);
+          this.available_goodies--;
+        }
       }
     });
+  }
+
+  dropItem(entityClassname, origin, params = {}) {
+    const item = /** @type {BaseItemEntity} */(this.engine.SpawnEntity(entityClassname, {
+      origin: origin.copy(),
+      regeneration_time: 0, // do not regenerate
+      remove_after: 120, // remove after 2 minutes
+      ...params,
+    }));
+
+    console.assert(item instanceof BaseItemEntity, 'dropped item is not a BaseItemEntity');
+
+    // toss it around
+    item.toss();
+  }
+
+  dropGoodie(monster, attacker) {
+    if (attacker.health < 25) {
+      this.dropItem(HealthItemEntity.classname, monster.origin);
+      return;
+    }
+
+    if ((attacker.items & (items.IT_NAILGUN | items.IT_SUPER_NAILGUN)) && attacker.ammo_nails < 20) {
+      this.dropItem(ItemSpikesEntity.classname, monster.origin, {
+        ammo_nails: 50,
+      });
+      return;
+    }
+
+    if ((attacker.items & (items.IT_SHOTGUN | items.IT_SUPER_SHOTGUN)) && attacker.ammo_shells < 10) {
+      this.dropItem(ItemShellsEntity.classname, monster.origin);
+      return;
+    }
+
+    if (Math.random() < 0.25 && (
+      (this.available_goodies_quad > 0) &&
+      (this.game.stats.monsters_total - this.game.stats.monsters_killed) > 50
+    )) {
+      this.dropItem(SuperDamageEntity, monster.origin);
+      this.available_goodies_quad--;
+      return;
+    }
   }
 
   spawnEnemies() {
@@ -290,9 +351,16 @@ export default class GameManager {
       const start = player.origin.copy();
       const end = this.designed_buyzone.centerPoint.copy();
 
-      const path = this.engine.Navigate(start, end).map((v) => v.add(player.view_ofs));
+      const navpath = this.engine.Navigate(start, end);
 
-      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...path);
+      if (!navpath) {
+        continue;
+      }
+
+      const path = navpath.map((v) => v.add(player.view_ofs));
+      const visiblePath = path; // TODO: only send waypoints that are visible
+
+      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
     }
   }
 
@@ -354,10 +422,10 @@ export default class GameManager {
     }
 
     // cleaning up all the corpses
-    for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
-      const entity = /** @type {BaseMonster} */(edict.entity);
-      entity.lazyRemove();
-    }
+    // for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
+    //   const entity = /** @type {BaseMonster} */(edict.entity);
+    //   entity.lazyRemove();
+    // }
 
     this.round_number++;
 
@@ -367,6 +435,9 @@ export default class GameManager {
     const ratio = (this.round_number - 1) / (this.round_number_limit - 1);
 
     this.round_monsters_limit = start + Math.floor((end - start) * ratio * clients);
+
+    this.available_goodies = clients * 2;
+    this.available_goodies_quad = 1;
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
 
@@ -423,6 +494,11 @@ export default class GameManager {
    */
   // eslint-disable-next-line no-unused-vars
   clientConnected(playerEntity) {
+    // we initialize the game once the first player connects
+    if (!this.gameInitialized) {
+      this.#initGame();
+      this.gameInitialized = true;
+    }
   }
 
   /**
@@ -495,6 +571,11 @@ export default class GameManager {
     }
 
     this.engine.ConsolePrint(`squad standing ${squadStanding}/${squadTotal}\n`);
+  }
+
+  #initGame() {
+    // make sure all shops are closed
+    this.closeShops();
   }
 
   resetGame() {
