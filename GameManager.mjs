@@ -422,10 +422,10 @@ export default class GameManager {
     }
 
     // cleaning up all the corpses
-    // for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
-    //   const entity = /** @type {BaseMonster} */(edict.entity);
-    //   entity.lazyRemove();
-    // }
+    for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
+      const entity = /** @type {BaseMonster} */(edict.entity);
+      entity._scheduleThink(this.game.time + Math.random() * 5.0 + 2.5, function() { this.remove(); });
+    }
 
     this.round_number++;
 
