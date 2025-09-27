@@ -90,6 +90,12 @@ export default class HellwavePayer extends PlayerEntity {
 
   /** @protected */
   _spectate() {
+    const origin = this.origin.copy();
+    const angles = this.angles.copy();
+    this.clear();
+    this.setOrigin(origin);
+    this.angles.set(angles);
+
     this.flags |= flags.FL_FLY | flags.FL_NOTARGET;
     this.movetype = moveType.MOVETYPE_NOCLIP;
     this.solid = solid.SOLID_NOT;
@@ -182,12 +188,6 @@ export default class HellwavePayer extends PlayerEntity {
   }
 
   putPlayerInServer() {
-    // select spawn spot
-    const spot = this._selectSpawnPoint();
-    this.origin = spot.origin.copy().add(new Vector(0.0, 0.0, 1.0));
-    this.angles = spot.angles.copy();
-    this.setOrigin(this.origin);
-
     // update client on stats
     this.game.stats.sendToPlayer(this);
     this.updateMoney();
@@ -197,6 +197,12 @@ export default class HellwavePayer extends PlayerEntity {
     } else {
       this._unspectate();
     }
+
+    // select spawn spot
+    const spot = this._selectSpawnPoint();
+    this.origin = spot.origin.copy().add(new Vector(0.0, 0.0, 1.0));
+    this.angles = spot.angles.copy();
+    this.setOrigin(this.origin);
   }
 
   _handleImpulseCommands() {
