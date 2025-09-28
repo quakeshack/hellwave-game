@@ -172,6 +172,9 @@ export default class GameManager {
           this.available_goodies--;
         }
       }
+
+      // bump the navigation hint each time
+      this.next_hint_time = this.game.time + 15.0;
     });
   }
 
@@ -364,6 +367,37 @@ export default class GameManager {
     }
   }
 
+  showLastEnemyHint() {
+    const lastMonster = Array.from(this.engine.FindAllByFilter((edict) => (edict.entity instanceof BaseMonster) && edict.entity.health > 0))[0]?.entity;
+
+    if (!lastMonster) {
+      return; // no monster found
+    }
+
+    for (const clientEdict of this.engine.GetClients()) {
+      /** @type {HellwavePayer} */
+      const player = clientEdict.entity;
+
+      if (player.spectating) {
+        continue; // skip spectators
+      }
+
+      const start = player.origin.copy();
+      const end = lastMonster.centerPoint.copy();
+
+      const navpath = this.engine.Navigate(start, end);
+
+      if (!navpath) {
+        continue;
+      }
+
+      const path = navpath.map((v) => v.add(player.view_ofs));
+      const visiblePath = path; // TODO: only send waypoints that are visible
+
+      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+    }
+  }
+
   /**
    * Assess the current game state and make changes if necessary.
    * In this method we have all rules and checks that need to be done every frame.
@@ -392,6 +426,13 @@ export default class GameManager {
           break;
         }
         this.spawnEnemies();
+        // help out finding the last enemy
+        if (this.round_monsters_limit - this.game.stats.monsters_killed === 1) {
+          if (this.next_hint_time <= this.game.time) {
+            this.showLastEnemyHint();
+            this.next_hint_time = this.game.time + 5.0;
+          }
+        }
         break;
 
       case phases.gameover:
@@ -456,6 +497,8 @@ export default class GameManager {
   }
 
   startQuietPhase() {
+    this.next_hint_time = this.game.time + 3.0;
+
     this.phase = phases.quiet;
     this.phase_ending_time = this.game.time + this.game.quiettime;
 
