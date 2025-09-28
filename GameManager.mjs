@@ -385,10 +385,14 @@ export default class GameManager {
       const start = player.origin.copy();
       const end = lastMonster.centerPoint.copy();
 
+      if (start.distanceTo(end) < 128.0) {
+        continue; // too close
+      }
+
       const navpath = this.engine.Navigate(start, end);
 
       if (!navpath) {
-        continue;
+        continue; // no valid path
       }
 
       const path = navpath.map((v) => v.add(player.view_ofs));
