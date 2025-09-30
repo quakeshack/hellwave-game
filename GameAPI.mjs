@@ -33,7 +33,6 @@ import HellwavePayer from './entity/hellwave/Player.mjs';
 import Cvar from '../../engine/common/Cvar.mjs';
 
 /** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
-/** @typedef {import("../../engine/common/Cvar.mjs").default} Cvar */
 
 const featureFlags = [
   'correct-ballistic-grenades', // enables zombie gib and ogre grenade trajectory fix
@@ -687,7 +686,7 @@ export class ServerGameAPI {
       entityClass._precache(this.engine);
     }
 
-    this.manager.round_number_limit = Math.max(1, Math.min(20, cvars.rounds.value));
+    this.manager.round_number_limit = Math.max(1, Math.min(12, cvars.rounds.value));
   }
 
   // eslint-disable-next-line no-unused-vars

@@ -24,6 +24,7 @@ export const phases = Object.freeze({
   normal: 'normal', // monsters spawn normally
   action: 'action', // monsters spawn more frequently
   gameover: 'gameover', // game over, waiting for intermission
+  victory: 'victory', // all rounds complete, waiting for intermission
 });
 
 const gameRoundMonsterMatrix = {
@@ -51,7 +52,7 @@ const gameRoundMonsterMatrix = {
   4: [
     { classname: WizardMonsterEntity.classname, probability: 0.3 },
     { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
     { classname: ZombieMonster.classname, probability: 0.5 },
     { classname: KnightMonster.classname, probability: 1.0 },
     { classname: HellKnightMonster.classname, probability: 0.5 },
@@ -66,6 +67,69 @@ const gameRoundMonsterMatrix = {
     { classname: HellKnightMonster.classname, probability: 1.0 },
     { classname: ArmySoldierMonster.classname, probability: 1.0 },
     { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
+  ],
+  6: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.3, limit: 1 },
+    { classname: ZombieMonster.classname, probability: 0.5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+  ],
+  7: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
+    { classname: ShalrathMissileEntity.classname, probability: 0.7, limit: 3 },
+    { classname: ZombieMonster.classname, probability: 0.2, limit: 3 },
+    { classname: HellKnightMonster.classname, probability: 1.0 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
+  ],
+  8: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 2 },
+    { classname: ZombieMonster.classname, probability: 0.5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 1.0 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
+  ],
+  9: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3 },
+    { classname: ZombieMonster.classname, probability: 0.5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 2 },
+    { classname: ShalrathMissileEntity.classname, probability: 0.7 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
+  ],
+  10: [
+    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
+    { classname: ArmySoldierMonster.classname, probability: 0.75 },
+    { classname: HellKnightMonster.classname, probability: 0.5 },
+    { classname: KnightMonster.classname, probability: 0.75 },
+  ],
+  11: [
+    { classname: WizardMonsterEntity.classname, probability: 0.5 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 1 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 1.0 },
+  ],
+  12: [
+    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 1 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 5 },
+    { classname: WizardMonsterEntity.classname, probability: 0.5, limit: 5 },
   ],
 };
 
@@ -408,6 +472,7 @@ export default class GameManager {
    */
   assessGameState() {
     switch (this.phase) {
+      // buy time, players can spawn
       case phases.quiet:
         if (this.phase_ending_time <= this.game.time) {
           // TODO: better event to the players
@@ -419,6 +484,7 @@ export default class GameManager {
         }
         break;
 
+      // main game loop, spawning enemies and checking for round end
       case phases.action:
       case phases.normal:
         if (this.phase_ending_time <= this.game.time) {
@@ -439,12 +505,17 @@ export default class GameManager {
         }
         break;
 
+      // transition to next map
+      case phases.victory:
       case phases.gameover:
-        // TODO: gameover thinking
+        if (this.phase_ending_time <= this.game.time) {
+          this.game.gameover = true;
+          this.game.loadNextMap();
+        }
         break;
 
+      // waiting for players to join
       case phases.waiting:
-        // we are waiting for players to join
         break;
     }
   }
@@ -461,8 +532,8 @@ export default class GameManager {
    */
   startNextRound() {
     if (this.round_number === this.round_number_limit) {
-      this.engine.BroadcastPrint('Maximum number of rounds reached.\n');
-      // TODO: final boss mission
+      this.engine.ConsolePrint('Maximum number of rounds reached.\n');
+      this.startVictoryPhase();
       return;
     }
 
@@ -477,12 +548,12 @@ export default class GameManager {
     const clients = Array.from(this.engine.GetClients()).length;
 
     const start = 20, end = 200;
-    const ratio = (this.round_number - 1) / (this.round_number_limit - 1);
+    const ratio = this.round_number_limit > 1 ? (this.round_number - 1) / (this.round_number_limit - 1) : 0;
 
     this.round_monsters_limit = start + Math.floor((end - start) * ratio * clients);
 
-    this.available_goodies = clients * 2;
-    this.available_goodies_quad = 1;
+    this.available_goodies = Math.ceil(this.round_monsters_limit / 10);
+    this.available_goodies_quad = Math.floor(this.round_monsters_limit / 30);
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
 
@@ -508,6 +579,8 @@ export default class GameManager {
 
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+
+    this.engine.PlayTrack(0, 0);
   }
 
   startNormalPhase() {
@@ -518,6 +591,8 @@ export default class GameManager {
 
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+
+    this.engine.PlayTrack(this.game.worldspawn.sounds, this.game.worldspawn.sounds);
   }
 
   startActionPhase() {
@@ -529,8 +604,20 @@ export default class GameManager {
   }
 
   startGameOverPhase() {
+    this.engine.PlayTrack(3, 3);
+
     this.phase = phases.gameover;
     this.phase_ending_time = this.game.time + 10.0; // 10 seconds until next map
+
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
+    this.engine.eventBus.publish('game.phase.endingtime', 0);
+  }
+
+  startVictoryPhase() {
+    this.game.startIntermission();
+
+    this.phase = phases.victory;
+    this.phase_ending_time = this.game.time + 30.0; // 30 seconds until forcefully next map
 
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', 0);
@@ -626,8 +713,6 @@ export default class GameManager {
   }
 
   resetGame() {
-    this.engine.ConsolePrint('resetting game\n');
-    // TODO: resetting game
-    this.engine.AppendConsoleText('restart\n');
+    this.engine.ChangeLevel(this.game.mapname);
   }
 };

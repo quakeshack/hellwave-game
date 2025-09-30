@@ -36,16 +36,6 @@ export default class HellwavePayer extends PlayerEntity {
     'spectating',
   ];
 
-  // _playerDeathThink() {
-  //   if (this.game.manager.phase !== phases.quiet) {
-  //     this.button0 = false;
-  //     this.button1 = false;
-  //     this.button2 = false;
-  //   }
-
-  //   super._playerDeathThink();
-  // }
-
   _respawn() {
     switch (this.game.manager.phase) {
       case phases.quiet:
@@ -61,6 +51,11 @@ export default class HellwavePayer extends PlayerEntity {
         // trigger next map?
         break;
     }
+  }
+
+  _applySpawnParameters() {
+    // always make sure players start from zero
+    this._freshSpawnParameters();
   }
 
   _declareFields() {
@@ -86,6 +81,7 @@ export default class HellwavePayer extends PlayerEntity {
     this.ammo_cells = 0;
     this.weapon = items.IT_AXE;
     this.armortype = 0;
+    this.money = 1000;
   }
 
   /** @protected */

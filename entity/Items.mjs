@@ -1,6 +1,6 @@
 import Vector from '../../../shared/Vector.mjs';
 
-import { channel, clientEvent, flags, items, moveType, solid, tentType, worldType } from '../Defs.mjs';
+import { channel, clientEvent, effect, flags, items, moveType, solid, tentType, worldType } from '../Defs.mjs';
 import BaseEntity from './BaseEntity.mjs';
 import { PlayerEntity } from './Player.mjs';
 import { Sub } from './Subs.mjs';
@@ -43,6 +43,7 @@ export class BaseItemEntity extends BaseEntity {
     this.solid = solid.SOLID_TRIGGER;
     this.movetype = moveType.MOVETYPE_TOSS;
     this.origin[2] += 6.0;
+    // this.effects |= effect.EF_MINLIGHT;
     // this.dropToFloor();
   }
 
