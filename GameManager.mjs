@@ -497,7 +497,7 @@ export default class GameManager {
         }
         this.spawnEnemies();
         // help out finding the last enemy
-        if (this.round_monsters_limit - this.game.stats.monsters_killed === 1) {
+        if (this.round_monsters_limit - this.game.stats.monsters_killed <= 3) {
           if (this.next_hint_time <= this.game.time) {
             this.showLastEnemyHint();
             this.next_hint_time = this.game.time + 5.0;

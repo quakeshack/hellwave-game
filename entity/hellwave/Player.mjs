@@ -1,23 +1,23 @@
 import Vector from '../../../../shared/Vector.mjs';
 import { channel, clientEvent, flags, items, moveType, solid } from '../../Defs.mjs';
 import { phases } from '../../GameManager.mjs';
-import { BackpackEntity, HealthItemEntity, LightArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../Items.mjs';
+import { BackpackEntity, HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../Items.mjs';
 import { PlayerEntity } from '../Player.mjs';
 import { Backpack } from '../Weapons.mjs';
 
 export const buyMenuItems = {
-  1: { cost: 100, label: 'Armor', entityClass: LightArmorEntity },
+  1: { cost: 100, label: 'Heavy Armor', entityClass: HeavyArmorEntity },
 
   2: { cost: 200, label: 'Shotgun / 20 shells', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 } },
-  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun },
+  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun, backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 } },
 
-  4: { cost: 1000, label: 'Nailgun', entityClass: WeaponNailgun },
-  5: { cost: 3000, label: 'Super Nailgun (+ 50 nails)', entityClass: WeaponSuperNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 50 } },
+  4: { cost: 1000, label: 'Nailgun', entityClass: WeaponNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 100 } },
+  5: { cost: 3000, label: 'Super Nailgun', entityClass: WeaponSuperNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 200 } },
 
   6: { cost: 5000, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
   7: { cost: 5000, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
 
-  8: { cost: 8000, label: 'Thunderbolt', entityClass: WeaponThunderbolt },
+  8: { cost: 8000, label: 'Thunderbolt', entityClass: WeaponThunderbolt, backpack: { items: items.IT_CELLS, ammo_cells: 200 } },
 
   9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
 };
