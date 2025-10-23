@@ -282,14 +282,19 @@ export class QuakeEntityAI extends EntityAI {
     }
 
     if (this._game.time > this._enemyMetadata.nextPathUpdateTime && !this._gameAI._sightEntityLastOrigin.isOrigin()) {
-      const newPath = this._engine.Navigate(this._entity.origin, this._gameAI._sightEntityLastOrigin);
+      this._engine.NavigateAsync(this._entity.origin, this._gameAI._sightEntityLastOrigin).then((newPath) => {
+        if (!this._entity || !this._entity.edict) {
+          // freed
+          return;
+        }
 
-      if (newPath !== null) {
-        this._path = newPath;
-        console.debug(`${this._entity} updated path to enemy ${this._entity.enemy} with ${this._path.length} waypoints`);
-      } else {
-        console.warn(`${this._entity} could not find path to enemy ${this._entity.enemy}`);
-      }
+        if (newPath !== null) {
+          this._path = newPath;
+          console.debug(`${this._entity} updated path to enemy ${this._entity.enemy} with ${this._path.length} waypoints`);
+        } else {
+          console.warn(`${this._entity} could not find path to enemy ${this._entity.enemy}`);
+        }
+      });
 
       this._enemyMetadata.nextPathUpdateTime = this._game.time + 10.0 + Math.random() * 5.0;
     }

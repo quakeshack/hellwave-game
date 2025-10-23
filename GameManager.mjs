@@ -390,7 +390,7 @@ export default class GameManager {
 
     this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
 
-    console.debug(`spawned enemy ${enemy} at ${origin} goal ${goalentity}`, enemy);
+    // console.debug(`spawned enemy ${enemy} at ${origin} goal ${goalentity}`, enemy);
 
     // send off into the world
     if (goalentity !== null) {
@@ -418,16 +418,16 @@ export default class GameManager {
       const start = player.origin.copy();
       const end = this.designed_buyzone.centerPoint.copy();
 
-      const navpath = this.engine.Navigate(start, end);
+      this.engine.NavigateAsync(start, end).then((navpath) => {
+        if (!navpath || clientEdict.isFree()) {
+          return;
+        }
 
-      if (!navpath) {
-        continue;
-      }
+        const path = navpath.map((v) => v.add(player.view_ofs));
+        const visiblePath = path; // TODO: only send waypoints that are visible
 
-      const path = navpath.map((v) => v.add(player.view_ofs));
-      const visiblePath = path; // TODO: only send waypoints that are visible
-
-      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+        this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+      });
     }
   }
 
