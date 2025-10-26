@@ -471,6 +471,11 @@ export default class GameManager {
    * In this method we have all rules and checks that need to be done every frame.
    */
   assessGameState() {
+    if (this.game.intermission_running > 0) {
+      // do not interfere during intermission
+      return;
+    }
+
     switch (this.phase) {
       // buy time, players can spawn
       case phases.quiet:
@@ -607,7 +612,7 @@ export default class GameManager {
     this.engine.PlayTrack(3, 3);
 
     this.phase = phases.gameover;
-    this.phase_ending_time = this.game.time + 10.0; // 10 seconds until next map
+    this.phase_ending_time = this.game.time + 5.0; // 5 seconds until next map
 
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', 0);
@@ -645,11 +650,8 @@ export default class GameManager {
   /**
    * @param {PlayerEntity} playerEntity player
    */
+  // eslint-disable-next-line no-unused-vars
   clientBeing(playerEntity) {
-    // TODO:
-    // - during quiet phase, spawn at a random spawn point
-    // - during normal and active phase, become a spectator until the next round starts
-
     switch (this.phase) {
       case phases.waiting:
         this.startNextRound();
@@ -658,9 +660,7 @@ export default class GameManager {
         // regular spawn
         break;
 
-      case phases.normal:
-      case phases.action:
-      case phases.gameover:
+      default:
         // spawn as spectator
         break;
     }
