@@ -1,21 +1,20 @@
 import Vector from '../../shared/Vector.mjs';
+import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from '../id1/entity/Items.mjs';
+import { TeleportEffectEntity } from '../id1/entity/Misc.mjs';
+import BaseMonster from '../id1/entity/monster/BaseMonster.mjs';
+import DogMonsterEntity from '../id1/entity/monster/Dog.mjs';
+import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.mjs';
+import OgreMonsterEntity from '../id1/entity/monster/Ogre.mjs';
+import { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.mjs';
+import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.mjs';
+import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.mjs';
+import WizardMonsterEntity from '../id1/entity/monster/Wizard.mjs';
+import ZombieMonster from '../id1/entity/monster/Zombie.mjs';
+import { Serializer } from '../id1/helper/MiscHelpers.mjs';
 import { clientEvent, items } from './Defs.mjs';
-import HellwavePayer from './entity/hellwave/Player.mjs';
-import { BuyZoneEntity } from './entity/hellwave/Zones.mjs';
-import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from './entity/Items.mjs';
-import { TeleportEffectEntity } from './entity/Misc.mjs';
-import BaseMonster from './entity/monster/BaseMonster.mjs';
-import DogMonsterEntity from './entity/monster/Dog.mjs';
-import { HellKnightMonster, KnightMonster } from './entity/monster/Knights.mjs';
-import OgreMonsterEntity from './entity/monster/Ogre.mjs';
-import { ShalrathMissileEntity } from './entity/monster/Shalrath.mjs';
-import ShamblerMonsterEntity from './entity/monster/Shambler.mjs';
-import { ArmyEnforcerMonster, ArmySoldierMonster } from './entity/monster/Soldier.mjs';
-import WizardMonsterEntity from './entity/monster/Wizard.mjs';
-import ZombieMonster from './entity/monster/Zombie.mjs';
-import { PlayerEntity } from './entity/Player.mjs';
+import HellwavePlayer from './entity/Player.mjs';
+import { BuyZoneEntity } from './entity/Zones.mjs';
 import { ServerGameAPI } from './GameAPI.mjs';
-import { Serializer } from './helper/MiscHelpers.mjs';
 
 /** @enum {string} @readonly */
 export const phases = Object.freeze({
@@ -134,12 +133,11 @@ const gameRoundMonsterMatrix = {
 };
 
 export default class GameManager {
-
   /**
    * @param {ServerGameAPI} game game
    */
   constructor(game) {
-    this.game = game;
+    this.game = /** @type {ServerGameAPI} */ (game);
     this.engine = game.engine;
 
     this._serializer = new Serializer(this, game.engine);
@@ -185,8 +183,7 @@ export default class GameManager {
 
     const zones = Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity));
 
-    /** @type {BuyZoneEntity?} */
-    const zone = zones[Math.floor(Math.random() * zones.length)]?.entity;
+    const zone = /** @type {BuyZoneEntity?} */(zones[Math.floor(Math.random() * zones.length)]?.entity);
 
     if (zone) {
       zone.openShop();
@@ -198,8 +195,7 @@ export default class GameManager {
 
   closeShops() {
     for (const edict of Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity))) {
-      /** @type {BuyZoneEntity} */
-      const zone = edict.entity;
+      const zone = /** @type {BuyZoneEntity} */(edict.entity);
       zone.closeShop();
     }
 
@@ -221,13 +217,13 @@ export default class GameManager {
       this.checkSquadStatus(null);
 
       // friendly fire money penalty
-      if (attacker instanceof HellwavePayer && attacker !== player) {
+      if (attacker instanceof HellwavePlayer && attacker !== player) {
         attacker.updateMoney(-500);
       }
     });
 
     this.engine.eventBus.subscribe('game.monster.killed', (monster, attacker) => {
-      if (attacker instanceof HellwavePayer) {
+      if (attacker instanceof HellwavePlayer) {
         attacker.updateMoney(100); // TODO: different money for different monsters
         attacker.frags++;
 
@@ -242,13 +238,18 @@ export default class GameManager {
     });
   }
 
+  /**
+   * @param {string} entityClassname classname of the entity to drop
+   * @param {Vector} origin origin to drop at
+   * @param {object} params optional additional spawn parameters
+   */
   dropItem(entityClassname, origin, params = {}) {
     const item = /** @type {BaseItemEntity} */(this.engine.SpawnEntity(entityClassname, {
       origin: origin.copy(),
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 2 minutes
       ...params,
-    }));
+    }).entity);
 
     console.assert(item instanceof BaseItemEntity, 'dropped item is not a BaseItemEntity');
 
@@ -278,7 +279,7 @@ export default class GameManager {
       (this.available_goodies_quad > 0) &&
       (this.game.stats.monsters_total - this.game.stats.monsters_killed) > 50
     )) {
-      this.dropItem(SuperDamageEntity, monster.origin);
+      this.dropItem(SuperDamageEntity.classname, monster.origin);
       this.available_goodies_quad--;
       return;
     }
@@ -335,7 +336,7 @@ export default class GameManager {
 
     this.spawn_next = this.game.time + (this.phase === phases.action ? 0.5 : 3.0);
 
-    const goalentity = this.engine.FindInRadius(origin, 4096.0, (edict) => edict.entity instanceof PlayerEntity)[0]?.entity || null;
+    const goalentity = this.engine.FindInRadius(origin, 4096.0, (edict) => edict.entity instanceof HellwavePlayer)[0]?.entity || null;
 
     // determine what to spawn
     const monsterChoices = gameRoundMonsterMatrix[Math.min(this.round_number, Math.max(...Object.keys(gameRoundMonsterMatrix).map((k) => parseInt(k, 10))))] || []; // TODO: default
@@ -386,7 +387,7 @@ export default class GameManager {
       origin,
       enemy: goalentity,
       // TODO: facing angle (should face player)
-    }));
+    }).entity);
 
     this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
 
@@ -408,8 +409,7 @@ export default class GameManager {
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      /** @type {HellwavePayer} */
-      const player = clientEdict.entity;
+      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
 
       if (player.spectating || player.buyzone) {
         continue; // skip spectators and players already in the buyzone
@@ -427,6 +427,8 @@ export default class GameManager {
         const visiblePath = path; // TODO: only send waypoints that are visible
 
         this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+      }).catch(() => {
+        this.engine.ConsoleWarning('Navigation for buzone hint failed.\n');
       });
     }
   }
@@ -439,8 +441,7 @@ export default class GameManager {
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      /** @type {HellwavePayer} */
-      const player = clientEdict.entity;
+      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
 
       if (player.spectating) {
         continue; // skip spectators
@@ -536,7 +537,7 @@ export default class GameManager {
    * It will also set all the necessary variables and settings for the upcoming phases.
    */
   startNextRound() {
-    if (this.round_number === this.round_number_limit) {
+    if (this.round_number === this.round_number_limit && this.round_number_limit > 0) {
       this.engine.ConsolePrint('Maximum number of rounds reached.\n');
       this.startVictoryPhase();
       return;
@@ -545,7 +546,7 @@ export default class GameManager {
     // cleaning up all the corpses
     for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
       const entity = /** @type {BaseMonster} */(edict.entity);
-      entity._scheduleThink(this.game.time + Math.random() * 5.0 + 2.5, function() { this.remove(); });
+      entity._scheduleThink(this.game.time + Math.random() * 5.0 + 2.5, function () { this.remove(); });
     }
 
     this.round_number++;
@@ -566,7 +567,7 @@ export default class GameManager {
 
     // make sure that we spawn all spectating players
     for (const clent of this.engine.GetClients()) {
-      const player = /** @type {HellwavePayer} */(clent.entity);
+      const player = /** @type {HellwavePlayer} */(clent.entity);
 
       if (!player.spectating) {
         continue; // not spectating
@@ -585,7 +586,7 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
 
-    this.engine.PlayTrack(0, 0);
+    this.engine.PlayTrack(0);
   }
 
   startNormalPhase() {
@@ -597,7 +598,7 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
 
-    this.engine.PlayTrack(this.game.worldspawn.sounds, this.game.worldspawn.sounds);
+    this.engine.PlayTrack(this.game.worldspawn.sounds);
   }
 
   startActionPhase() {
@@ -609,7 +610,7 @@ export default class GameManager {
   }
 
   startGameOverPhase() {
-    this.engine.PlayTrack(3, 3);
+    this.engine.PlayTrack(3); // Intermission music
 
     this.phase = phases.gameover;
     this.phase_ending_time = this.game.time + 5.0; // 5 seconds until next map
@@ -629,7 +630,7 @@ export default class GameManager {
   }
 
   /**
-   * @param {PlayerEntity} playerEntity player
+   * @param {HellwavePlayer} playerEntity player
    */
   // eslint-disable-next-line no-unused-vars
   clientConnected(playerEntity) {
@@ -641,14 +642,14 @@ export default class GameManager {
   }
 
   /**
-   * @param {PlayerEntity} playerEntity player
+   * @param {HellwavePlayer} playerEntity player
    */
   clientDisconnected(playerEntity) {
     this.checkSquadStatus(playerEntity);
   }
 
   /**
-   * @param {PlayerEntity} playerEntity player
+   * @param {HellwavePlayer} playerEntity player
    */
   // eslint-disable-next-line no-unused-vars
   clientBeing(playerEntity) {
@@ -670,8 +671,7 @@ export default class GameManager {
     let squadTotal = 0, squadStanding = 0;
 
     for (const clientEdict of this.engine.GetClients()) {
-      /** @type {HellwavePayer} */
-      const player = clientEdict.entity;
+      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
 
       if (skipPlayerEntity && player.equals(skipPlayerEntity)) {
         continue; // skip the leaving player

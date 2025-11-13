@@ -1,11 +1,12 @@
-import Vector from '../../../../shared/Vector.mjs';
-import { moveType, solid } from '../../Defs.mjs';
-import BaseEntity from '../BaseEntity.mjs';
-import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../Misc.mjs';
-import PlayerEntity from '../hellwave/Player.mjs';
-import { BaseTriggerEntity } from '../Triggers.mjs';
+import Vector from '../../../shared/Vector.mjs';
+import { moveType, solid } from '../Defs.mjs';
+import HellwavePlayer from './Player.mjs';
 import { WallEntity } from './Props.mjs';
-import { phases } from '../../GameManager.mjs';
+import { phases } from '../GameManager.mjs';
+import { BaseTriggerEntity } from '../../id1/entity/Triggers.mjs';
+import BaseEntity from '../../id1/entity/BaseEntity.mjs';
+import { ServerGameAPI } from '../GameAPI.mjs';
+import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.mjs';
 
 /**
  * QUAKED func_buyzone (0.5 0 0.5) ?
@@ -30,7 +31,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
    * @param {BaseEntity} other touching entity
    */
   touch(other) {
-    if (!(other instanceof PlayerEntity)) {
+    if (!(other instanceof HellwavePlayer)) {
       return;
     }
 
@@ -67,7 +68,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     }
   }
 
-  /** @param {PlayerEntity} player player */
+  /** @param {HellwavePlayer} player player */
   #teleportPlayerOutOfBuyzone(player) {
     const spawnzones = Array.from(this.#getPlayerSpawnzones())[0];
 
@@ -102,7 +103,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     }
 
     for (let i = 1; i <= this.engine.maxplayers + 1; i++) {
-      const player = /** @type {PlayerEntity} */(this.engine.GetEdictById(i));
+      const player = /** @type {HellwavePlayer} */(this.engine.GetEdictById(i).entity);
 
       if (this.game.time - this._playerInsideTime[i] <= 0.1) {
         const spawnpoint = spawnzones.spawnpoints[i - 1];
@@ -135,10 +136,6 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     this.unsetModel(false);
 
     this._scheduleThink(this.game.time + 0.1, function () { this.openShop(); });
-
-    // testing stuff:
-    // this._scheduleThink(this.game.time + 5.0, function () { this.openShop(); });
-    // this._scheduleThink(this.game.time + 15.0, function () { this.closeShop(); });
   }
 };
 

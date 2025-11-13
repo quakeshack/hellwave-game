@@ -1,5 +1,5 @@
-import { moveType, solid } from '../../Defs.mjs';
-import { BaseWallEntity } from '../Misc.mjs';
+import { BaseWallEntity } from '../../id1/entity/Misc.mjs';
+import { moveType, solid } from '../Defs.mjs';
 
 /**
  * QUAKED func_wall (0 .5 .8) ?

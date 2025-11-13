@@ -1,736 +1,115 @@
+import { cvarFlags } from '../../shared/Defs.mjs';
+import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
+import EntityRegistry from '../id1/helper/Registry.mjs';
+import HellwavePlayer from './entity/Player.mjs';
+import { WallEntity } from './entity/Props.mjs';
+import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.mjs';
+import GameManager from './GameManager.mjs';
+import HellwaveStats from './helper/HellwaveStats.mjs';
 
-import { GibEntity, InfoPlayerStart, InfoPlayerStartCoop, InfoPlayerStartDeathmatch, PlayerEntity, qc as playerModelQC, TelefragTriggerEntity } from './entity/Player.mjs';
-import { BodyqueEntity, WorldspawnEntity } from './entity/Worldspawn.mjs';
-import { clientEvent, spawnflags } from './Defs.mjs';
-import * as misc from './entity/Misc.mjs';
-import * as door from './entity/props/Doors.mjs';
-import * as platform from './entity/props/Platforms.mjs';
-import * as trigger from './entity/Triggers.mjs';
-import { ArmySoldierMonster, ArmyEnforcerMonster, qc as soldierModelQCs } from './entity/monster/Soldier.mjs';
-import { GameAI } from './helper/AI.mjs';
-import * as sub from './entity/Subs.mjs';
-import { ButtonEntity } from './entity/props/Buttons.mjs';
-import * as item from './entity/Items.mjs';
-import BaseEntity from './entity/BaseEntity.mjs';
-import * as weapon from './entity/Weapons.mjs';
-import DogMonsterEntity, { qc as dogModelQC } from './entity/monster/Dog.mjs';
-import { Serializer } from './helper/MiscHelpers.mjs';
-import DemonMonster, { qc as demonModelQC } from './entity/monster/Demon.mjs';
-import { MeatSprayEntity } from './entity/monster/BaseMonster.mjs';
-import ZombieMonster, { ZombieGibGrenade, qc as zombieModelQC } from './entity/monster/Zombie.mjs';
-import { KnightMonster, HellKnightMonster, qc as knightModelQCs, KnightSpike } from './entity/monster/Knights.mjs';
-import OgreMonsterEntity, { qc as ogreModelQC } from './entity/monster/Ogre.mjs';
-import ShalrathMonsterEntity, { ShalrathMissileEntity, qc as shalrathModelQC } from './entity/monster/Shalrath.mjs';
-import ShamblerMonsterEntity, { qc as shamblerModelQC } from './entity/monster/Shambler.mjs';
-import TarbabyMonsterEntity, { qc as tbabyModelQC } from './entity/monster/Tarbaby.mjs';
-import FishMonsterEntity, { qc as fishQC } from './entity/monster/Fish.mjs';
-import WizardMonsterEntity, { WizardMissile, qc as wizardQC } from './entity/monster/Wizard.mjs';
+/** @typedef {import("../../shared/GameInterfaces").Cvar} Cvar */
+/** @typedef {import("../../shared/GameInterfaces").ServerEngineAPI} ServerEngineAPI */
 
-import * as zones from './entity/hellwave/Zones.mjs';
-import GameManager, { phases } from './GameManager.mjs';
-import * as hwProps from './entity/hellwave/Props.mjs';
-import HellwavePayer from './entity/hellwave/Player.mjs';
-import Cvar from '../../engine/common/Cvar.mjs';
+const entityClasses = [].concat(id1EntityClasses, [
+  WallEntity,
+  BuyZoneEntity,
+  BuyZoneShuttersEntity,
+  MonstersSpawnZoneEntity,
+  PlayersSpawnZoneEntity,
+]);
 
-/** @typedef {typeof import("../../engine/common/GameAPIs.mjs").ServerEngineAPI} ServerEngineAPI */
+export class ServerGameAPI extends id1ServerGameAPI {
+  static _entityRegistry = new EntityRegistry(entityClasses);
 
-const featureFlags = [
-  'correct-ballistic-grenades', // enables zombie gib and ogre grenade trajectory fix
-];
+  static _cvars = Object.assign({}, id1ServerGameAPI._cvars, {
+    rounds: null,
+    quiettime: null,
+    normaltime: null,
+    maxmonstersalive: null,
+    debug_spawnpoints: null,
+  });
 
-/** entity class registry */
-export const entityRegistry = new Map([
-  WorldspawnEntity,
-  BodyqueEntity,
-  HellwavePayer,
-
-  misc.NullEntity,
-  misc.InfoNotNullEntity,
-  misc.IntermissionCameraEntity,
-
-  InfoPlayerStart,
-  InfoPlayerStartCoop,
-  InfoPlayerStartDeathmatch,
-  GibEntity,
-  MeatSprayEntity,
-
-  weapon.Missile,
-  weapon.Spike,
-  weapon.Superspike,
-  weapon.Grenade,
-  weapon.Laser,
-
-  misc.ViewthingEntity,
-  misc.DebugMarkerEntity,
-
-  misc.LightEntity,
-  misc.LightFluorosparkEntity,
-  misc.LightFluoroEntity,
-  misc.SmallWalltorchLightEntity,
-  misc.YellowLargeFlameLightEntity,
-  misc.YellowSmallFlameLightEntity,
-  misc.WhiteSmallFlameLightEntity,
-  misc.LightGlobeEntity,
-  misc.LightGlobeDynamicEntity,
-
-  misc.FireballSpawnerEntity,
-  misc.FireballEntity,
-
-  misc.AmbientCompHum,
-  misc.AmbientDrone,
-  misc.AmbientSuckWind,
-  misc.AmbientFlouroBuzz,
-  misc.AmbientDrip,
-  misc.AmbientThunder,
-  misc.AmbientLightBuzz,
-  misc.AmbientSwamp1,
-  misc.AmbientSwamp2,
-
-  hwProps.WallEntity,
-  misc.IllusionaryWallEntity,
-  misc.EpisodegateWallEntity,
-  misc.BossgateWallEntity,
-
-  misc.PathCornerEntity,
-
-  misc.TeleportEffectEntity,
-  misc.BubbleEntity,
-  misc.BubbleSpawnerEntity,
-  misc.StaticBubbleSpawnerEntity,
-
-  misc.BarrelEntity,
-  misc.SmallBarrelEntity,
-
-  misc.TrapShooterEntity,
-  misc.TrapSpikeshooterEntity,
-
-  trigger.MultipleTriggerEntity,
-  trigger.InfoTeleportDestination,
-  trigger.TeleportTriggerEntity,
-  trigger.SecretTriggerEntity,
-  trigger.OnceTriggerEntity,
-  trigger.RelayTriggerEntity,
-  trigger.CountTriggerEntity,
-  trigger.OnlyRegisteredTriggerEntity,
-  trigger.SetSkillTriggerEntity,
-  trigger.ChangeLevelTriggerEntity,
-  trigger.TriggerHurtEntity,
-  trigger.TriggerPushEntity,
-  trigger.TriggerMonsterjumpEntity,
-
-  TelefragTriggerEntity,
-
-  ArmySoldierMonster,
-  ArmyEnforcerMonster,
-  DogMonsterEntity,
-  DemonMonster,
-  ZombieMonster,
-  ZombieGibGrenade,
-  KnightMonster,
-  HellKnightMonster,
-  KnightSpike,
-  OgreMonsterEntity,
-  ShalrathMonsterEntity,
-  ShalrathMissileEntity,
-  ArmyEnforcerMonster,
-  ShamblerMonsterEntity,
-  TarbabyMonsterEntity,
-  FishMonsterEntity,
-  WizardMonsterEntity,
-  WizardMissile,
-
-  door.DoorEntity,
-  door.SecretDoorEntity,
-
-  platform.PlatformEntity,
-  platform.PlatformTriggerEntity,
-  platform.TrainEntity,
-  platform.TeleportTrainEntity,
-
-  ButtonEntity,
-
-  sub.TriggerFieldEntity,
-  sub.DelayedThinkEntity,
-
-  item.BackpackEntity,
-  item.ItemShellsEntity,
-  item.ItemSpikesEntity,
-  item.ItemRocketsEntity,
-  item.ItemCellsEntity,
-
-  item.GoldKeyEntity,
-  item.SilverKeyEntity,
-
-  item.InvisibilityEntity,
-  item.InvulnerabilityEntity,
-  item.RadsuitEntity,
-  item.SuperDamageEntity,
-
-  item.SigilEntity,
-
-  item.HealthItemEntity,
-  item.HeavyArmorEntity,
-  item.LightArmorEntity,
-  item.StrongArmorEntity,
-
-  item.WeaponSuperShotgun,
-  item.WeaponGrenadeLauncher,
-  item.WeaponNailgun,
-  item.WeaponSuperNailgun,
-  item.WeaponRocketLauncher,
-  item.WeaponThunderbolt,
-
-  zones.BuyZoneEntity,
-  zones.MonstersSpawnZoneEntity,
-  zones.PlayersSpawnZoneEntity,
-  zones.BuyZoneShuttersEntity,
-].map((entityClass) => [
-  /** @type {string} */(entityClass.classname),
-  /** @type {typeof BaseEntity} */(entityClass),
-]));
-
-/**
- * Cvar cache
- * @type {Record<string, Cvar|null>}
- */
-const cvars = {
-  nomonster: null,
-  fraglimit: null,
-  timelimit: null,
-  samelevel: null,
-  noexit: null,
-  skill: null,
-  deathmatch: null,
-  coop: null,
-
-  rounds: null,
-  quiettime: null,
-  normaltime: null,
-  maxmonstersalive: null,
-  debug_spawnpoints: null,
-};
-
-/**
- * Game statistics class.
- * It tracks monsters and secrets.
- * It is used to send statistics to clients.
- */
-class GameStats {
-  /**
-   * @param {ServerGameAPI} gameAPI game API
-   * @param {ServerEngineAPI} engineAPI engineAPI
-   */
-  constructor(gameAPI, engineAPI) {
-    this.game = gameAPI;
-    this.engine = engineAPI;
-
-    this._serializer = new Serializer(this, engineAPI);
-    this._serializer.startFields();
-    this.monsters_total = 0;
-    this.monsters_killed = 0;
-    this.secrets_total = 0;
-    this.secrets_found = 0;
-    this.round_current = 0;
-    this.round_total = 0;
-    this.squad_standing = 0;
-    this.squad_total = 0;
-    this.round_monsters_limit = 0;
-    /** @type {keyof typeof phases} */
-    this.phase = phases.waiting;
-    this.phase_ending_time = 0; // game.time + X, in seconds
-    this._serializer.endFields();
-
-    Object.seal(this);
-  }
-
-  subscribeToEvents() {
-    this.engine.eventBus.subscribe('game.secret.spawned', () => { this.secrets_total++; });
-    this.engine.eventBus.subscribe('game.secret.found', (secretEntity, finderEntity) => {
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'secrets_found', ++this.secrets_found, finderEntity.edict);
-    });
-
-    this.engine.eventBus.subscribe('game.monster.spawned', () => {
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', ++this.monsters_total);
-    });
-
-    this.engine.eventBus.subscribe('game.monster.killed', (monsterEntity, attackerEntity) => {
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', ++this.monsters_killed, attackerEntity.edict);
-    });
-
-    this.engine.eventBus.subscribe('game.round.started', (roundNumber, roundTotal, roundMonstersLimit) => {
-      this.round_current = roundNumber;
-      this.round_total = roundTotal;
-      this.round_monsters_limit = roundMonstersLimit;
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_current', this.round_current);
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_total', this.round_total);
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_monsters_limit', this.round_monsters_limit);
-
-      // reset stats
-      this.monsters_total = 0;
-      this.monsters_killed = 0;
-
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', this.monsters_total);
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', this.monsters_killed);
-    });
-
-    this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
-      if (this.phase !== newPhase) {
-        this.phase = newPhase;
-        this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase', this.phase);
-      }
-    });
-
-    this.engine.eventBus.subscribe('game.phase.endingtime', (newEndingTime) => {
-      if (this.phase_ending_time !== newEndingTime) {
-        this.phase_ending_time = newEndingTime;
-        this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase_ending_time', this.phase_ending_time);
-      }
-    });
-  }
-
-  updateSquadStats(squadStanding, squadTotal) {
-    if (this.squad_standing !== squadStanding) {
-      this.squad_standing = squadStanding;
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_standing', this.squad_standing);
-    }
-
-    if (this.squad_total !== squadTotal) {
-      this.squad_total = squadTotal;
-      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_total', this.squad_total);
-    }
-
-    return this;
-  }
-
-  /**
-   * @param {PlayerEntity} playerEntity client player entity
-   */
-  sendToPlayer(playerEntity) {
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'monsters_total', this.monsters_total);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'monsters_killed', this.monsters_killed);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'secrets_total', this.secrets_total);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'secrets_found', this.secrets_found);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_total', this.round_total);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_current', this.round_current);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_standing', this.squad_standing);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'squad_total', this.squad_total);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase', this.phase);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'phase_ending_time', this.phase_ending_time);
-    this.engine.DispatchClientEvent(playerEntity.edict, true, clientEvent.STATS_INIT, 'round_monsters_limit', this.round_monsters_limit);
-  }
-};
-
-/** @typedef {import('../../shared/GameInterfaces').ServerGameInterface} ServerGameInterface */
-/** @augments ServerGameInterface */
-export class ServerGameAPI {
   /**
    * Invoked by spawning a server or a changelevel. It will initialize the global game state.
    * @param {ServerEngineAPI} engineAPI engine exports
    */
   constructor(engineAPI) {
-    this._serializer = new Serializer(this, engineAPI);
-
-    /** @type {ServerEngineAPI} */
-    this.engine = engineAPI;
+    super(engineAPI);
 
     this._serializer.startFields();
-
-    this.mapname = null; // Engine API
-
-    this.force_retouch = 0; // Engine API
-
-    // stats
-    this.stats = new GameStats(this, engineAPI);
-
-    // checkout Player.decodeLevelParms to understand this
-    this.parm1 = 0;
-    this.parm2 = 0;
-    this.parm3 = 0;
-    this.parm4 = 0;
-    this.parm5 = 0;
-    this.parm6 = 0;
-    this.parm7 = 0;
-    this.parm8 = 0;
-    this.parm9 = 0;
-    this.parm10 = 0;
-    this.parm11 = 0;
-    this.parm12 = 0;
-    this.parm13 = 0;
-    this.parm14 = 0;
-    this.parm15 = 0;
-    this.parm16 = 0;
-
-    this.serverflags = 0;
-
-    this.time = 0;
-    this.framecount = 0;
-    this.frametime = 0;
-
-    /** @type {?WorldspawnEntity} QuakeC: world */
-    this.worldspawn = null;
-
-    /** @type {?BaseEntity} the last selected spawn point, used for cycling spawn spots */
-    this.lastspawn = null;
-
-    // game state related
-    this.gameover = false;
-    /** @type {number} intermission state (0 = off) */
-    this.intermission_running = 0;
-    /** @type {number} time when intermission is over */
-    this.intermission_exittime = 0.0;
-    /** @type {?string} next map name */
-    this.nextmap = null;
-
     this.manager = new GameManager(this);
-
     this._serializer.endFields();
-
-    this.gameAI = new GameAI(this);
-
-    /** @type {?BodyqueEntity} holds the dead player body chain */
-    this.bodyque_head = null;
-
-    /** @type {Record<string, import('../../shared/GameInterfaces').ParsedQC>} */
-    this._modelData = { // FIXME: I’m not happy about this, this needs to be next to models, I should put QC inside the entity classes and make them wire up there, it’s also only relevant for the state machine
-      'progs/soldier.mdl': engineAPI.ParseQC(soldierModelQCs.solider),
-      'progs/enforcer.mdl': engineAPI.ParseQC(soldierModelQCs.enforcer),
-      'progs/player.mdl': engineAPI.ParseQC(playerModelQC),
-      'progs/dog.mdl': engineAPI.ParseQC(dogModelQC),
-      'progs/demon.mdl': engineAPI.ParseQC(demonModelQC),
-      'progs/zombie.mdl': engineAPI.ParseQC(zombieModelQC),
-      'progs/knight.mdl': engineAPI.ParseQC(knightModelQCs.knight),
-      'progs/hknight.mdl': engineAPI.ParseQC(knightModelQCs.hellKnight),
-      'progs/ogre.mdl': engineAPI.ParseQC(ogreModelQC),
-      'progs/shalrath.mdl': engineAPI.ParseQC(shalrathModelQC),
-      'progs/shambler.mdl': engineAPI.ParseQC(shamblerModelQC),
-      'progs/tarbaby.mdl': engineAPI.ParseQC(tbabyModelQC),
-      'progs/fish.mdl': engineAPI.ParseQC(fishQC),
-      'progs/wizard.mdl': engineAPI.ParseQC(wizardQC),
-    };
-
-    /** @private */
-    this._missingEntityClassStats = {};
-
-    // FIXME: I’m not happy about this structure, especially with the getters down below
-    /** cvar cache @type {Record<string, Cvar>} @private */
-    this._cvars = {
-      teamplay: engineAPI.GetCvar('teamplay'),
-      registered: engineAPI.GetCvar('registered'),
-      gravity: engineAPI.GetCvar('sv_gravity'),
-    };
-
-    Object.seal(this._modelData);
-    Object.seal(this._cvars);
-    Object.seal(this);
   }
 
-  get skill() {
-    return cvars.skill.value;
+  _newGameStats() {
+    return new HellwaveStats(this, this.engine);
   }
 
-  get teamplay() {
-    return this._cvars.teamplay.value;
-  }
-
-  get registered() {
-    return this._cvars.registered.value;
-  }
-
-  get timelimit() {
-    return cvars.timelimit.value;
-  }
-
-  get fraglimit() {
-    return cvars.fraglimit.value;
-  }
-
-  get deathmatch() {
-    return cvars.deathmatch.value;
-  }
-
-  get coop() {
-    return cvars.coop.value;
-  }
-
-  get samelevel() {
-    return cvars.samelevel.value;
-  }
-
-  get noexit() {
-    return cvars.noexit.value;
-  }
-
-  get nomonsters() {
-    return cvars.nomonster.value;
-  }
-
-  get gravity() {
-    return this._cvars.gravity.value;
+  get rounds() {
+    return ServerGameAPI._cvars.rounds.value;
   }
 
   get quiettime() {
-    return cvars.quiettime.value;
+    return ServerGameAPI._cvars.quiettime.value;
   }
 
   get normaltime() {
-    return cvars.normaltime.value;
+    return ServerGameAPI._cvars.normaltime.value;
   }
 
   get maxmonstersalive() {
-    return cvars.maxmonstersalive.value;
+    return ServerGameAPI._cvars.maxmonstersalive.value;
   }
 
   get debug_spawnpoints() {
-    return cvars.debug_spawnpoints.value;
-  }
-
-  hasFeature(feature) {
-    return featureFlags.includes(feature);
+    return ServerGameAPI._cvars.debug_spawnpoints.value;
   }
 
   startFrame() {
-    this.framecount++;
+    super.startFrame();
 
     this.manager.startFrame();
   }
 
-  PlayerPreThink(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
-    playerEntity.playerPreThink();
-  }
-
-  PlayerPostThink(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
-    playerEntity.playerPostThink();
-  }
-
   ClientConnect(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
+    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
     playerEntity.connected();
 
     this.manager.clientConnected(playerEntity);
   }
 
   ClientDisconnect(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
-    playerEntity.disconnected();
+    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
 
     this.manager.clientDisconnected(playerEntity);
   }
 
-  ClientKill(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
-    playerEntity.suicide();
-  }
-
-  PutClientInServer(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
-    playerEntity.putPlayerInServer();
-  }
-
   ClientBegin(clientEdict) {
-    const playerEntity = /** @type {PlayerEntity} */(clientEdict.entity);
+    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
 
     this.manager.clientBeing(playerEntity);
   }
 
-  /**
-   * Exit deathmatch games upon conditions.
-   * @param {PlayerEntity} playerEntity player
-   */
-  checkRules(playerEntity) {
-    if (this.gameover) {
-      return; // someone else quit the game already
-    }
+  /** @param {ServerEngineAPI} ServerEngineAPI engine API for server game code */
+  static Init(ServerEngineAPI) {
+    id1ServerGameAPI.Init(ServerEngineAPI);
 
-    if (this.timelimit > 0 && this.time >= this.timelimit * 60) {
-      this.gameover = true;
-      this.engine.BroadcastPrint('Timelimit reached.\n');
-      this.loadNextMap();
-      return;
-    }
+    Object.assign(this._cvars, id1ServerGameAPI._cvars);
 
-    if (this.fraglimit > 0 && playerEntity.frags > this.fraglimit) {
-      this.gameover = true;
-      this.engine.BroadcastPrint(`${playerEntity.netname} triggered the fraglimit.\n`);
-      this.loadNextMap();
-      return;
-    }
-  }
-
-  /**
-   * Will load next map.
-   * @param {?string} nextmap next map (default: this.nextmap)
-   */
-  loadNextMap(nextmap = this.nextmap) {
-    if (!nextmap || this.samelevel) {
-      this.engine.ChangeLevel(this.mapname);
-      return;
-    }
-
-    this.engine.ChangeLevel(nextmap);
-  }
-
-  /**
-   * @param {PlayerEntity} playerEntity player
-   */
-  sendMissingEntitiesToPlayer(playerEntity) {
-    const stats = Object.entries(this._missingEntityClassStats);
-    if (stats.length > 0) {
-      stats.sort(([, a], [, b]) => b - a);
-      playerEntity.consolePrint('Unknown entity classes on this map:\n');
-      for (const [name, cnt] of stats) {
-        playerEntity.consolePrint(`${new Number(cnt).toFixed(0).padStart(4, ' ')}x ${name}\n`);
-      }
-    }
-  }
-
-  startIntermission() {
-    if (this.intermission_running) {
-      return;
-    }
-
-    this.intermission_running = 1;
-    this.intermission_exittime = this.time + (this.deathmatch ? 5.0 : 2.0); // 5s for dm games
-
-    this.engine.PlayTrack(3, 3); // TODO: client responsibility
-
-    for (const player of this.engine.FindAllByFieldAndValue('classname', PlayerEntity.classname)) {
-      /** @type {PlayerEntity} */
-      const playerEntity = player.entity;
-      playerEntity.startIntermission();
-    }
-  }
-
-  prepareEntity(edict, classname, initialData = {}) {
-    if (!entityRegistry.has(classname)) {
-      this.engine.ConsoleWarning(`ServerGameAPI.prepareEntity: no entity factory for ${classname}!\n`);
-
-      this._missingEntityClassStats[classname] = (this._missingEntityClassStats[classname] || 0) + 1;
-      return false;
-    }
-
-    // spawnflags (control whether to spawn an entity or not)
-    {
-      const sflags = initialData.spawnflags || 0;
-
-      if (this.deathmatch && (sflags & spawnflags.SPAWNFLAG_NOT_DEATHMATCH)) { // no spawn in deathmatch
-        return false;
-      }
-
-      if (this.skill === 0 && (sflags & spawnflags.SPAWNFLAG_NOT_EASY)) {
-        return false;
-      }
-
-      if (this.skill === 1 && (sflags & spawnflags.SPAWNFLAG_NOT_MEDIUM)) {
-        return false;
-      }
-
-      if (this.skill >= 2 && (sflags & spawnflags.SPAWNFLAG_NOT_HARD)) {
-        return false;
-      }
-    }
-
-    const entityClass = entityRegistry.get(classname);
-    const entity = edict.entity?.classname === classname ? edict.entity : new entityClass(edict, this);
-
-    entity.assignInitialData(initialData);
-
-    return true;
-  }
-
-  spawnPreparedEntity(edict) {
-    if (!edict.entity) {
-      this.engine.ConsoleError('ServerGameAPI.prepareEntity: no entity class instance set!\n');
-      return false;
-    }
-
-    edict.entity.spawn();
-
-    return true;
-  }
-
-  getClientEntityFields() {
-    const clientEntityFields = {};
-
-    for (const [classname, entityClass] of entityRegistry) {
-      if (entityClass.clientEntityFields.length > 0) {
-        clientEntityFields[classname] = entityClass.clientEntityFields;
-      }
-    }
-
-    return clientEntityFields;
+    this._cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
+    this._cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    this._cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
+    this._cvars.maxmonstersalive = ServerEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
+    this._cvars.debug_spawnpoints = ServerEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', cvarFlags.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');
   }
 
   init(mapname, serverflags) {
-    this.mapname = mapname;
-    this.serverflags = serverflags;
-
-    // coop automatically disables deathmatch
-    if (cvars.coop.value) {
-      cvars.coop.set(true);
-      cvars.deathmatch.set(false);
-    }
-
-    // make sure skill is in range
-    cvars.skill.set(Math.max(0, Math.min(3, Math.floor(cvars.skill.value))));
-
-    // make sure stats are resubscribed
-    this.stats.subscribeToEvents();
+    super.init(mapname, serverflags);
 
     // make sure manager is subscribed
     this.manager.subscribeToEvents();
 
-    // precache all resources
-    for (const entityClass of entityRegistry.values()) {
-      entityClass._precache(this.engine);
-    }
-
-    this.manager.round_number_limit = Math.max(1, Math.min(12, cvars.rounds.value));
-  }
-
-  // eslint-disable-next-line no-unused-vars
-  shutdown(isCrashShutdown) {
-  }
-
-  /** @param {ServerEngineAPI} ServerEngineAPI engine API for server game code */
-  static Init(ServerEngineAPI) {
-    // define game cvars
-    cvars.nomonster = ServerEngineAPI.RegisterCvar('nomonster', '0', /* Cvar.FLAG.DEFERRED */ 0, 'Do not spawn monsters.');
-    cvars.samelevel = ServerEngineAPI.RegisterCvar('samelevel', '0', 0, 'Set to 1 to stay on the same map even the map is over');
-    cvars.fraglimit = ServerEngineAPI.RegisterCvar('fraglimit', '0');
-    cvars.timelimit = ServerEngineAPI.RegisterCvar('timelimit', '0');
-    cvars.noexit = ServerEngineAPI.RegisterCvar('noexit', '0');
-    cvars.skill = ServerEngineAPI.RegisterCvar('skill', '1');
-    cvars.deathmatch = ServerEngineAPI.RegisterCvar('deathmatch', '0');
-    cvars.coop = ServerEngineAPI.RegisterCvar('coop', '0');
-
-    // hellwave specific cvars
-    cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
-    cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
-    cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
-    cvars.maxmonstersalive = ServerEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
-    cvars.debug_spawnpoints = ServerEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', Cvar.FLAG.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');
-
-    // initialize all entity classes
-    for (const entityClass of entityRegistry.values()) {
-      entityClass._initStates();
-    }
-  }
-
-  static Shutdown() {
-    // free all cvars
-    for (const [key, cvar] of Object.entries(cvars).filter((cvar) => cvar !== null)) {
-      cvar.free();
-      cvars[key] = null;
-    }
-  }
-
-  serialize() {
-    return this._serializer.serialize();
-  }
-
-  deserialize(data) {
-    this._serializer.deserialize(data);
+    // set the round limit
+    this.manager.round_number_limit = Math.max(1, Math.min(12, ServerGameAPI._cvars.rounds.value));
   }
 };
