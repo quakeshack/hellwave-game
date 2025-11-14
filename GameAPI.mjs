@@ -68,6 +68,24 @@ export class ServerGameAPI extends id1ServerGameAPI {
     return ServerGameAPI._cvars.debug_spawnpoints.value;
   }
 
+  _precacheResources() {
+    super._precacheResources();
+
+    // we almost spawn all entities dynamically
+    for (const entityClass of ServerGameAPI._entityRegistry.getAll()) {
+      if (entityClass.classname.startsWith('item_key')) {
+        continue;
+      }
+
+      if (entityClass.classname.startsWith('monster_') ||
+        entityClass.classname.startsWith('item_') ||
+        entityClass.classname.startsWith('weapon_')
+      ) {
+        new entityClass(null, this); // forces a precache
+      }
+    }
+  }
+
   startFrame() {
     super.startFrame();
 

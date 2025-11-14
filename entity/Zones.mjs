@@ -6,6 +6,7 @@ import { phases } from '../GameManager.mjs';
 import { BaseTriggerEntity } from '../../id1/entity/Triggers.mjs';
 import BaseEntity from '../../id1/entity/BaseEntity.mjs';
 import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.mjs';
+import { ServerGameAPI } from '../GameAPI.mjs';
 
 /**
  * QUAKED func_buyzone (0.5 0 0.5) ?
@@ -38,7 +39,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
 
     this._playerInsideTime[other.edictId] = this.game.time;
 
-    if (this.game.manager.phase !== phases.quiet) {
+    if (/** @type {ServerGameAPI} */(this.game).manager.phase !== phases.quiet) {
       this.#teleportPlayerOutOfBuyzone(other);
     }
   }
@@ -186,18 +187,20 @@ export class MonstersSpawnZoneEntity extends BaseEntity {
   spawn() {
     this.setModel(this.model); // sets size and absmin/absmax
 
+    const game = /** @type {ServerGameAPI} */ (this.game);
+
     // const availableHeight = this.maxs[2] - this.mins[2] - 8.0;
     for (let x = this.mins[0] + 40.0; x <= this.maxs[0]; x += 80.0) {
       for (let y = this.mins[1] + 40.0; y <= this.maxs[1]; y += 80.0) {
         const origin = new Vector(x, y, this.mins[2] + 24.0);
 
-        if (this.game.debug_spawnpoints) {
+        if (game.debug_spawnpoints) {
           this.engine.SpawnEntity(DebugMarkerEntity.classname, {
             origin,
           });
         }
 
-        this.game.manager.spawnpoints.push(origin); // TODO: register available height too
+        game.manager.spawnpoints.push(origin); // TODO: register available height too
       }
     }
 
@@ -227,12 +230,14 @@ export class PlayersSpawnZoneEntity extends BaseEntity {
   spawn() {
     this.setModel(this.model); // sets size and absmin/absmax
 
+    const game = /** @type {ServerGameAPI} */ (this.game);
+
     // const availableHeight = this.maxs[2] - this.mins[2] - 8.0;
     for (let x = this.mins[0] + 40.0; x <= this.maxs[0]; x += 80.0) {
       for (let y = this.mins[1] + 40.0; y <= this.maxs[1]; y += 80.0) {
         const origin = new Vector(x, y, this.mins[2] + 24.0);
 
-        if (this.game.debug_spawnpoints) {
+        if (game.debug_spawnpoints) {
           this.engine.SpawnEntity(DebugMarkerEntity.classname, {
             origin,
           });
