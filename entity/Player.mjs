@@ -2,9 +2,10 @@ import Vector from '../../../shared/Vector.mjs';
 import { channel, clientEvent, flags, items, moveType, solid } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
 import { ServerGameAPI } from '../GameAPI.mjs';
-import { BackpackEntity, HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
+import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
 import { PlayerEntity } from '../../id1/entity/Player.mjs';
 import { Backpack } from '../../id1/entity/Weapons.mjs';
+import { BackpackEntity } from './Items.mjs';
 
 /** @typedef {import('../../../shared/GameInterfaces').ServerEdict} ServerEdict */
 /** @typedef {import('../../../shared/GameInterfaces').ServerEngineAPI} ServerEngineAPI */
@@ -49,7 +50,7 @@ export default class HellwavePlayer extends PlayerEntity {
   ];
 
   _respawn() {
-    switch (this.game.manager.phase) {
+    switch (/** @type {ServerGameAPI} */(this.game).manager.phase) {
       case phases.quiet:
         super._respawn();
         break;
@@ -123,7 +124,7 @@ export default class HellwavePlayer extends PlayerEntity {
 
   /** @protected */
   _dropBackpack() {
-    const moneyToDrop = Math.min(300, this.money);
+    const moneyToDrop = Math.min(300, this.money); // money capped to 300 per backpack
 
     const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
       origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)),
@@ -196,11 +197,13 @@ export default class HellwavePlayer extends PlayerEntity {
   }
 
   putPlayerInServer() {
+    const manager = /** @type {ServerGameAPI} */(this.game).manager;
+
     // update client on stats
     this.game.stats.sendToPlayer(this);
     this.updateMoney();
 
-    if (this.game.manager.phase !== phases.quiet && this.game.manager.phase !== phases.waiting) {
+    if (manager.phase !== phases.quiet && manager.phase !== phases.waiting) {
       this._spectate();
     } else {
       this._unspectate();
@@ -302,7 +305,7 @@ export default class HellwavePlayer extends PlayerEntity {
   playerPostThink() {
     super.playerPostThink();
 
-    if (this.game.manager.phase !== phases.quiet) {
+    if (/** @type {ServerGameAPI} */(this.game).manager.phase !== phases.quiet) {
       this.buyzone = -1;
       return;
     }

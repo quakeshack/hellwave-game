@@ -1,6 +1,7 @@
 import { cvarFlags } from '../../shared/Defs.mjs';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
 import EntityRegistry from '../id1/helper/Registry.mjs';
+import { BackpackEntity } from './entity/Items.mjs';
 import HellwavePlayer from './entity/Player.mjs';
 import { WallEntity } from './entity/Props.mjs';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.mjs';
@@ -12,6 +13,7 @@ import HellwaveStats from './helper/HellwaveStats.mjs';
 
 const entityClasses = [].concat(id1EntityClasses, [
   HellwavePlayer,
+  BackpackEntity,
   WallEntity,
   BuyZoneEntity,
   BuyZoneShuttersEntity,
