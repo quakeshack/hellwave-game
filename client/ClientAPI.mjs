@@ -32,14 +32,23 @@ export class ClientGameAPI extends id1ClientGameAPI {
     return new HellwaveHUD(this, this.engine);
   }
 
+  _updateViewModel() {
+    if (this.clientdata.spectating) {
+      this.viewmodel.visible = false;
+      return;
+    }
+
+    super._updateViewModel();
+  }
+
   init() {
     super.init();
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.NAV_HINT), (...waypoints) => {
-      const points = sampleBSpline(waypoints, 100);
+      const points = sampleBSpline(waypoints, Math.min(100, waypoints.length * 2));
 
       for (let i = 1; i < points.length; i++) {
-        this.engine.RocketTrail(points[i - 1], points[i], 1);
+        this.engine.RocketTrail(points[i - 1], points[i], 7);
       }
     });
   }

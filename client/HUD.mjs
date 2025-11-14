@@ -37,7 +37,7 @@ export default class HellwaveHUD extends Q1HUD {
     if (this.game.clientdata.spectating) {
       const msg = 'Spectating... Waiting for next round';
       const x = this.sbar.alignCenterHorizontally(16 * msg.length);
-      this.sbar.drawString(x, -48, msg, 2.0);
+      this.sbar.drawString(x, -24, msg, 2.0);
       return;
     }
 
@@ -63,7 +63,7 @@ export default class HellwaveHUD extends Q1HUD {
 
     if (this.game.clientdata.buyzone === 2) {
       const startY = -48 - 16 * 16;
-      this.sbar.drawString(0, startY, 'Available to buy:', 2.0);
+      this.sbar.drawString(0, startY, 'Available for purchase:', 2.0);
 
       for (const [impulse, item] of Object.entries(buyMenuItems)) {
         if (item.cost <= this.inventory.money[0]) {
