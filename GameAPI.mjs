@@ -11,6 +11,7 @@ import HellwaveStats from './helper/HellwaveStats.mjs';
 /** @typedef {import("../../shared/GameInterfaces").ServerEngineAPI} ServerEngineAPI */
 
 const entityClasses = [].concat(id1EntityClasses, [
+  HellwavePlayer,
   WallEntity,
   BuyZoneEntity,
   BuyZoneShuttersEntity,

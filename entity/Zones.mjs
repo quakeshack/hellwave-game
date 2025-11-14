@@ -5,7 +5,6 @@ import { WallEntity } from './Props.mjs';
 import { phases } from '../GameManager.mjs';
 import { BaseTriggerEntity } from '../../id1/entity/Triggers.mjs';
 import BaseEntity from '../../id1/entity/BaseEntity.mjs';
-import { ServerGameAPI } from '../GameAPI.mjs';
 import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.mjs';
 
 /**

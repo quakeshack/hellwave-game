@@ -1,7 +1,6 @@
 import { gameCapabilities } from '../../shared/Defs.mjs';
 import { ServerGameAPI } from './GameAPI.mjs';
-// import { ClientGameAPI } from './client/ClientAPI.mjs';
-import { ClientGameAPI } from '../id1/main.mjs';
+import { ClientGameAPI } from './client/ClientAPI.mjs';
 
 const identification = {
   name: 'Hellwave',

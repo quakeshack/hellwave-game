@@ -3,6 +3,7 @@ import { clientEvent } from '../Defs.mjs';
 import HellwavePlayer from '../entity/Player.mjs';
 import { phases } from '../GameManager.mjs';
 
+// NOTE: keep in sync with server HellwaveStatsInfo
 export default class HellwaveStats extends GameStats {
   reset() {
     super.reset();

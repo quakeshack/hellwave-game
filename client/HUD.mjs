@@ -1,370 +1,26 @@
 import Q from '../../../shared/Q.mjs';
 import Vector from '../../../shared/Vector.mjs';
-import { clientEvent, clientEventName, colors, contentShift, items } from '../Defs.mjs';
-import { buyMenuItems } from '../entity/hellwave/Player.mjs';
-import { weaponConfig } from '../entity/Weapons.mjs';
+
+import { buyMenuItems } from '../entity/Player.mjs';
+import { clientEvent, clientEventName, colors, contentShift } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
-import { ClientGameAPI } from './ClientAPI.mjs';
+import { Q1HUD } from '../../../game/id1/client/HUD.mjs';
+import { HellwaveStatsInfo } from './Sync.mjs';
 
-/** @typedef {typeof import('../../../engine/common/GameAPIs.mjs').ClientEngineAPI} ClientEngineAPI */
-/** @typedef {import('../../../shared/GameInterfaces').GLTexture} GLTexture */
-/** @typedef {import('../entity/Weapons.mjs').WeaponConfigKey} WeaponConfigKey */
-
-const backgrounds = {
-  /** @type {GLTexture} */
-  statusbar: null,
-  /** @type {GLTexture} */
-  inventorybar: null,
-  /** @type {GLTexture} */
-  scorebar: null,
-};
-
-const faces = {
-  /** @type {GLTexture} */
-  face_invis: null,
-  /** @type {GLTexture} */
-  face_invuln: null,
-  /** @type {GLTexture} */
-  face_invis_invuln: null,
-  /** @type {GLTexture} */
-  face_quad: null,
-  /** @type {GLTexture[][]} */
-  faces: [
-    [null, null],
-    [null, null],
-    [null, null],
-    [null, null],
-    [null, null],
-  ],
-};
-
-const armors = {
-  /** @type {GLTexture} */
-  armor1: null,
-  /** @type {GLTexture} */
-  armor2: null,
-  /** @type {GLTexture} */
-  armor3: null,
-};
-
-const ammos = {
-  /** @type {GLTexture} */
-  ammo_shells: null,
-  /** @type {GLTexture} */
-  ammo_nails: null,
-  /** @type {GLTexture} */
-  ammo_rockets: null,
-  /** @type {GLTexture} */
-  ammo_cells: null,
-};
-
-const labels = {
-  /** @type {GLTexture} */
-  ranking: null,
-  /** @type {GLTexture} */
-  complete: null,
-  /** @type {GLTexture} */
-  inter: null,
-  /** @type {GLTexture} */
-  finale: null,
-};
-
-const inventory = [
-  // weapons
-  { item: items.IT_SHOTGUN, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SHOTGUN', iconPrefix: 'INV' },
-  { item: items.IT_SUPER_SHOTGUN, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SSHOTGUN', iconPrefix: 'INV' },
-  { item: items.IT_NAILGUN, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'NAILGUN', iconPrefix: 'INV' },
-  { item: items.IT_SUPER_NAILGUN, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SNAILGUN', iconPrefix: 'INV' },
-  { item: items.IT_GRENADE_LAUNCHER, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'RLAUNCH', iconPrefix: 'INV' },
-  { item: items.IT_ROCKET_LAUNCHER, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SRLAUNCH', iconPrefix: 'INV' },
-  { item: items.IT_LIGHTNING, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'LIGHTNG', iconPrefix: 'INV' },
-
-  // keys
-  { item: items.IT_KEY1, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'KEY1', iconPrefix: 'SB' },
-  { item: items.IT_KEY2, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'KEY2', iconPrefix: 'SB' },
-
-  // powerups
-  { item: items.IT_INVISIBILITY, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'INVIS', iconPrefix: 'SB' },
-  { item: items.IT_INVULNERABILITY, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'INVULN', iconPrefix: 'SB' },
-  { item: items.IT_SUIT, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SUIT', iconPrefix: 'SB' },
-  { item: items.IT_QUAD, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'QUAD', iconPrefix: 'SB' },
-
-  // runes
-  { item: items.IT_SIGIL1, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SIGIL1', iconPrefix: 'SB' },
-  { item: items.IT_SIGIL2, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SIGIL2', iconPrefix: 'SB' },
-  { item: items.IT_SIGIL3, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SIGIL3', iconPrefix: 'SB' },
-  { item: items.IT_SIGIL4, icon: null, iconInactive: null, iconWidth: 0, iconSuffix: 'SIGIL4', iconPrefix: 'SB' },
-];
-
-/**
- * Graphics helper class for the HUD.
- * Used to draw pictures, strings, numbers, and rectangles within a defined layout.
- */
-class Gfx {
-  offsets = [0, 0];
-  scale = 1.0;
-
-  /** @type {number[]} stores layout rect independend from the scale */
-  #size = [0, 0];
-
-  static #nums = [
-    new Array(11).fill(null),
-    new Array(11).fill(null),
-  ];
-
-  /** @type {GLTexture} */
-  static #colon = null;
-  /** @type {GLTexture} */
-  static #slash = null;
-
-  /**
-   * @param {ClientEngineAPI} clientEngineAPI client engine API
-   * @param {number} width viewport width
-   * @param {number} height viewport height
-   * @param {number} scale scale factor for the HUD
-   */
-  constructor(clientEngineAPI, width, height, scale = 1.0) {
-    this.clientEngineAPI = clientEngineAPI;
-    this.#size[0] = width;
-    this.#size[1] = height;
-    this.scale = scale;
+export default class HellwaveHUD extends Q1HUD {
+  _newStats() {
+    return new HellwaveStatsInfo(this.engine);
   }
 
-  /**
-   * @param {ClientEngineAPI} clientEngineAPI client engine API
-   */
-  static loadAssets(clientEngineAPI) {
-    for (let i = 0; i < 10; i++) {
-      this.#nums[0][i] = clientEngineAPI.LoadPicFromWad(`NUM_${i}`);
-      this.#nums[1][i] = clientEngineAPI.LoadPicFromWad(`ANUM_${i}`);
-    }
+  _subscribeToEvents() {
+    super._subscribeToEvents();
 
-    this.#nums[0][10] = clientEngineAPI.LoadPicFromWad('NUM_MINUS');
-    this.#nums[1][10] = clientEngineAPI.LoadPicFromWad('ANUM_MINUS');
-
-    this.#colon = clientEngineAPI.LoadPicFromWad('NUM_COLON');
-    this.#slash = clientEngineAPI.LoadPicFromWad('NUM_SLASH');
-  }
-
-  get width() {
-    return this.#size[0] * this.scale;
-  }
-
-  get height() {
-    return this.#size[1] * this.scale;
-  }
-
-  alignCenterHorizontally(width) {
-    return (this.#size[0] - width * this.scale) / 2;
-  }
-
-  drawPic(x, y, pic) {
-    this.clientEngineAPI.DrawPic((x + this.offsets[0]), (y + this.offsets[1]), pic, this.scale);
-  }
-
-  drawString(x, y, text, scale = 1.0, color = new Vector(1.0, 1.0, 1.0)) {
-    this.clientEngineAPI.DrawString((x + this.offsets[0]), (y + this.offsets[1]), text, scale * this.scale, color);
-  }
-
-  drawRect(x, y, width, height, color, alpha) {
-    this.clientEngineAPI.DrawRect((x + this.offsets[0]), (y + this.offsets[1]), width * this.scale, height * this.scale, color, alpha);
-  }
-
-  drawBorderedRect(x, y, width, height, color, alpha, border = 1.0) {
-    this.clientEngineAPI.DrawRect((x + this.offsets[0]), (y + this.offsets[1]), width * this.scale, height * this.scale, color, alpha);
-
-    this.clientEngineAPI.DrawRect((x + this.offsets[0]), (y + this.offsets[1]), width * this.scale, border * this.scale, color); // top
-    this.clientEngineAPI.DrawRect((x + this.offsets[0]), (y + this.offsets[1] + height - border * this.scale), width * this.scale, border * this.scale, color); // bottom
-    this.clientEngineAPI.DrawRect((x + this.offsets[0]), (y + this.offsets[1]), border * this.scale, height * this.scale, color); // left
-    this.clientEngineAPI.DrawRect((x + this.offsets[0] + width - border * this.scale), (y + this.offsets[1]), border * this.scale, height * this.scale, color); // right
-  }
-
-  drawNumber(x, y, number, digits = 3, color = 0) {
-    let str = number.toFixed(0); // can only handle integers
-    if (str.length > digits) {
-      str = str.substring(str.length - digits, str.length);
-    } else if (str.length < digits) {
-      x += (digits - str.length) * 24;
-    }
-    for (let i = 0; i < str.length; i++) {
-      const frame = str.charCodeAt(i);
-      this.drawPic(x, y, Gfx.#nums[color][frame === 45 ? 10 : frame - 48]);
-      x += 24;
-    }
-  }
-
-  drawSymbol(x, y, symbol) {
-    switch (symbol) {
-      case ':':
-        this.drawPic(x, y, Gfx.#colon);
-        break;
-      case '/':
-        this.drawPic(x, y, Gfx.#slash);
-        break;
-      default:
-        console.assert(false, `Unknown symbol: ${symbol}`);
-    }
-  }
-}
-
-const ammoLowColor = new Vector(1.0, 1.0, 1.0);
-const ammoColor = new Vector(1.0, 1.0, 1.0);
-
-export default class HUD {
-  /** +showscores/-showscores */
-  static #showScoreboard = false;
-
-  /** gamewide stats */
-  stats = {
-    monsters_total: 0,
-    monsters_killed: 0,
-    secrets_total: 0,
-    secrets_found: 0,
-    round_total: 0,
-    round_current: 0,
-    squad_total: 0,
-    squad_standing: 0,
-    round_monsters_limit: 0,
-    /** @type {keyof typeof phases?} */
-    phase: null,
-    phase_ending_time: 0, // game.time + X, in seconds
-  };
-
-  inventory = {
-    /** @type {number[]} current account balance */
-    money: [null, null, -Infinity],
-  };
-
-  /** damage related states */
-  damage = {
-    /** time when the last damage was received based on CL.gametime */
-    time: -Infinity,
-
-    /** attack origin vector */
-    attackOrigin: new Vector(0, 0, 0),
-
-    /** damage received, it will automatically decrease over time */
-    damageReceived: 0,
-  };
-
-  intermission = {
-    running: false,
-    message: null,
-    mapCompletedTime: 0,
-  };
-
-  /** @type {Gfx} drawing things within the layout of the status bar */
-  sbar = null;
-  /** @type {Gfx} drawing things within the layout of any overlay (intermission, rankings etc.) */
-  overlay = null;
-
-  /**
-   * @param {ClientGameAPI} clientGameAPI this game’s API
-   * @param {ClientEngineAPI} clientEngineAPI engine API
-   */
-  constructor(clientGameAPI, clientEngineAPI) {
-    this.game = clientGameAPI;
-    this.engine = clientEngineAPI;
-    Object.seal(this);
-    Object.seal(this.stats);
-
-    // setup the viewport
-    this.sbar = new Gfx(this.engine, 320, 24);
-    this.overlay = new Gfx(this.engine, 640, 480);
-  }
-
-  init() {
-    // make sure the HUD is initialized with the correct viewport size
-    const { width, height } = this.engine.VID;
-    this.#viewportResize(width, height);
-
-    // observe notable events
-    this.#subscribeToEvents();
-
-    ammoColor.set(this.engine.IndexToRGB(colors.HUD_AMMO_NORMAL));
-    ammoLowColor.set(this.engine.IndexToRGB(colors.HUD_AMMO_WARNING));
-  }
-
-  shutdown() {
-  }
-
-  #subscribeToEvents() {
-    // subscribe to viewsize resize events
-    this.engine.eventBus.subscribe('cvar.changed', (name) => {
-      switch (name) {
-        case 'viewsize': {
-          const { width, height } = this.engine.VID;
-          this.#viewportResize(width, height);
-        }
-        break;
-      }
-    });
-
-    // subscribe to viewport resize events
-    this.engine.eventBus.subscribe('vid.resize', ({ width, height }) => this.#viewportResize(width, height));
-
-    // damage received
-    this.engine.eventBus.subscribe('client.damage', (/** @type {import('../../../shared/GameInterfaces').ClientDamageEvent} */ clientDamageEvent) => {
-      this.damage.time = this.engine.CL.gametime;
-      this.damage.attackOrigin.set(clientDamageEvent.attackOrigin);
-      this.damage.damageReceived += clientDamageEvent.damageReceived;
-
-      if (this.damage.damageReceived > 150) {
-        this.damage.damageReceived = 150; // cap the damage to prevent a stuck damage screen
-      }
-    });
-
-    // picked up an item
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.ITEM_PICKED), (itemEntity, itemNames, netname, items) => {
-      if (netname !== null) {
-        this.engine.ConsolePrint(`You got ${netname}.\n`);
-      } else if (itemNames.length > 0) {
-        this.engine.ConsolePrint(`You got ${itemNames.join(', ')}.\n`);
-      } else {
-        this.engine.ConsolePrint('You found an empty item.\n');
-      }
-
-      // TODO: do the picked up animation effect
-      console.debug(`Picked up item: ${itemEntity.classname} (items = ${items})`);
-
-      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
-    });
-
-    // still used for some fading item effects
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.BONUS_FLASH), () => {
-      this.engine.ContentShift(contentShift.bonus, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
-    });
-
-    // game stats base value
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.STATS_INIT), (slot, value) => {
-      console.assert(slot in this.stats, `Unknown stat slot ${slot}`);
-      this.stats[slot] = value;
-    });
-
-    // game stats updates during game play
+    // eslint-disable-next-line no-unused-vars
     this.engine.eventBus.subscribe(clientEventName(clientEvent.STATS_UPDATED), (slot, value) => {
-      console.assert(slot in this.stats, `Unknown stat slot ${slot}`);
-      this.stats[slot] = value;
-
-      if (slot === 'secrets_found') {
-        this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_SECRET), 0.2);
-      }
-
       if (slot === 'phase') {
         this.engine.LoadSound('misc/talk.wav').play();
         this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
       }
-    });
-
-    // intermission screen
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.INTERMISSION_START), (message, origin, angles) => {
-      this.intermission.running = true;
-      this.intermission.message = message || null;
-      this.intermission.mapCompletedTime = this.engine.CL.gametime;
-
-      this.engine.CL.intermission = true;
-
-      console.debug('Intermission started:', this.intermission.message, 'origin: ' + origin, 'angles:' + angles);
     });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance) => {
@@ -372,203 +28,28 @@ export default class HUD {
     });
   }
 
-  #drawFace(x, y) {
-    const citems = this.game.clientdata.items;
+  inventory = {
+    /** @type {number[]} current account balance */
+    money: [null, null, -Infinity],
+  };
 
-    if (citems & (items.IT_INVISIBILITY | items.IT_INVULNERABILITY)) {
-      this.sbar.drawPic(x, y, faces.face_invis_invuln);
+  _drawStatusBar() {
+    if (this.game.clientdata.spectating) {
+      const msg = 'Spectating... Waiting for next round';
+      const x = this.sbar.alignCenterHorizontally(16 * msg.length);
+      this.sbar.drawString(x, -48, msg, 2.0);
       return;
     }
 
-    if (citems & (items.IT_QUAD)) {
-      this.sbar.drawPic(x, y, faces.face_quad);
-      return;
-    }
-
-    if (citems & (items.IT_INVISIBILITY)) {
-      this.sbar.drawPic(x, y, faces.face_invis);
-      return;
-    }
-
-    if (citems & (items.IT_INVULNERABILITY)) {
-      this.sbar.drawPic(x, y, faces.face_invuln);
-      return;
-    }
-
-    const health = Math.max(0, this.game.clientdata.health);
-
-    this.sbar.drawPic(x, y, faces.faces[health >= 100.0 ? 4 : Math.floor(health / 20.0)][this.damage.damageReceived > 0 ? 1 : 0]);
+    super._drawStatusBar();
   }
 
-  /**
-   * Draw the status bar, inventory bar, and score bar.
-   */
-  #drawStatusBar() {
-    const isFullscreen = this.engine.SCR.viewsize === 120;
+  draw() {
+    super.draw();
 
-    if (!isFullscreen) {
-      this.sbar.drawPic(0, 0, backgrounds.statusbar);
-    }
-
-    // Draw armor
-    if (this.game.clientdata.armorvalue >= 0) {
-      switch (true) {
-        case (this.game.clientdata.items & items.IT_ARMOR3) !== 0:
-          this.sbar.drawPic(0, 0, armors.armor3);
-          break;
-        case (this.game.clientdata.items & items.IT_ARMOR2) !== 0:
-          this.sbar.drawPic(0, 0, armors.armor2);
-          break;
-        case isFullscreen:
-        case (this.game.clientdata.items & items.IT_ARMOR1) !== 0:
-          this.sbar.drawPic(0, 0, armors.armor1);
-          break;
-      }
-
-      // Draw armor value
-      this.sbar.drawNumber(24, 0, this.game.clientdata.armorvalue, 3, this.game.clientdata.armorvalue <= 25 ? 1 : 0);
-    }
-
-    // Draw health
-    this.sbar.drawNumber(136, 0, Math.max(0, this.game.clientdata.health), 3, this.game.clientdata.health <= 25 ? 1 : 0);
-
-    // Draw face
-    this.#drawFace(112, 0);
-
-    // Draw current ammo
-    if (weaponConfig.has(/** @type {WeaponConfigKey} */(this.game.clientdata.weapon))) {
-      const weapon = weaponConfig.get(/** @type {WeaponConfigKey} */(this.game.clientdata.weapon));
-
-      if (weapon.ammoSlot) {
-        this.sbar.drawPic(224, 0, ammos[weapon.ammoSlot]);
-
-        console.assert(this.game.clientdata[weapon.ammoSlot] !== undefined, `Ammo slot ${weapon.ammoSlot} not found in clientdata`);
-        const ammo = this.game.clientdata[weapon.ammoSlot];
-        this.sbar.drawNumber(248, 0, Math.max(0, ammo), 3, ammo <= 10 ? 1 : 0);
-      }
-    }
-  }
-
-  #drawInventory(offsetY = 0) {
-    this.sbar.drawPic(0, offsetY, backgrounds.inventorybar);
-
-    // Draw ammo slots
-    const ammoSlots = ['ammo_shells', 'ammo_nails', 'ammo_rockets', 'ammo_cells'];
-    for (let i = 0; i < ammoSlots.length; i++) {
-      const ammoSlot = ammoSlots[i];
-      if (this.game.clientdata[ammoSlot] > 0) {
-        this.sbar.drawString((6 * i + 1) * 8 - 2, -24, this.game.clientdata[ammoSlot].toFixed(0).padStart(3), 1.0, this.game.clientdata[ammoSlot] <= 10 ? ammoLowColor : ammoColor);
-      }
-    }
-
-    // Draw inventory slots (both weapons and items)
-    for (let i = 0, wsOffsetX = 0; i < inventory.length; i++) {
-      const inv = inventory[i];
-      // TODO: do the picked up animation effect
-      if (this.game.clientdata.items & inv.item) {
-        if (this.game.clientdata.health > 0 && this.game.clientdata.weapon === inv.item) {
-          this.sbar.drawPic(wsOffsetX, offsetY + 8, inv.icon);
-        } else {
-          this.sbar.drawPic(wsOffsetX, offsetY + 8, inv.iconInactive);
-        }
-      }
-      wsOffsetX += inv.iconWidth;
-    }
-  }
-
-  #drawScoreboard() {
-    const secondaryColor = this.engine.IndexToRGB(colors.HUD_RANKING_TEXT);
-
-    this.overlay.drawPic(this.overlay.width - labels.ranking.width, 32, labels.ranking);
-    this.overlay.drawString((labels.ranking.height - 16) / 2, 32, this.game.serverInfo.hostname, 2.0, secondaryColor);
-
-    const x = 0;
-    let y = 64;
-
-    const scores = [];
-
-    for (let i = 0; i < this.engine.CL.maxclients; i++) {
-      if (!this.engine.CL.score(i).isActive) {
-        continue;
-      }
-
-      scores.push(this.engine.CL.score(i));
-    }
-
-    scores.sort((a, b) => b.frags - a.frags);
-
-    this.overlay.drawBorderedRect(x, y, this.overlay.width, this.overlay.height - 88, this.engine.IndexToRGB(colors.HUD_RANKING_BACKGROUND), 0.66);
-
-    for (let i = 0; i < scores.length; i++) {
-      const score = scores[i];
-      const isSpectator = score.entity.extended.spectating;
-      // const money = +score.entity.extended.money || 0;
-      const health = Math.max(0, +score.entity.extended.health || 0);
-
-      this.overlay.drawRect(x + 8, y + 24 * i + 8, 80, 8, this.engine.IndexToRGB((score.colors & 0xf0) + 8));
-      this.overlay.drawRect(x + 8, y + 24 * i + 16, 80, 8, this.engine.IndexToRGB((score.colors & 0xf) * 16 + 8));
-
-      if (isSpectator) {
-        this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} SPECTATE ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
-      } else {
-        this.overlay.drawString(x + 8, y + 24 * i + 8, `[${score.frags.toFixed(0).padStart(3)}] ${score.name.padEnd(18)} ${`${health.toFixed(0)} HP`.padStart(5)} ${score.ping.toFixed(0).padStart(4)} ms`, 2.0);
-      }
-    }
-
-    y += this.overlay.height - 88;
-
-    if (this.game.serverInfo.coop !== '0') {
-      const monsters = `Monsters: ${this.stats.monsters_killed.toFixed(0).padStart(3)} / ${this.stats.monsters_total.toFixed(0).padStart(3)}`;
-      const secrets =  `Secrets:  ${this.stats.secrets_found.toFixed(0).padStart(3)} / ${this.stats.secrets_total.toFixed(0).padStart(3)}`;
-      this.overlay.drawString(x + 8, y + 8, monsters, 1.0, secondaryColor);
-      this.overlay.drawString(x + 8, y + 16, secrets, 1.0, secondaryColor);
-
-      const time = Q.secsToTime(this.engine.CL.gametime);
-      this.overlay.drawString(this.overlay.width - 8 - 16 * time.length, y + 8, time, 2.0, secondaryColor);
-    }
-  }
-
-  #drawIntermission() {
-    if (this.intermission.message) {
-      this.overlay.drawString(16, 16, 'TODO: Intermission Message', 2.0);
-      // TODO: draw the intermission message
-    } else {
-      // draw the default intermission screen
-      this.overlay.drawPic(this.overlay.alignCenterHorizontally(labels.complete.width), 24, labels.complete);
-      this.overlay.drawPic(132, 76, labels.inter);
-
-      // draw the time in minutes and seconds
-      const dig = Math.floor(this.intermission.mapCompletedTime / 60);
-      const num = Math.floor(this.intermission.mapCompletedTime - dig * 60);
-      this.overlay.drawNumber(140+48+160, 82, dig, 4);
-      this.overlay.drawSymbol(234+48+160, 82, ':');
-      this.overlay.drawNumber(246+48+160, 82, Math.floor(num / 10), 1);
-      this.overlay.drawNumber(266+48+160, 82, num % 10, 1);
-
-      // draw secrets
-      this.overlay.drawNumber(140+160, 122, this.stats.secrets_found, 3);
-      this.overlay.drawSymbol(234+160, 122, '/');
-      this.overlay.drawNumber(266+160, 122, this.stats.secrets_total, 3);
-
-      // draw monsters
-      this.overlay.drawNumber(140+160, 162, this.stats.monsters_killed, 3);
-      this.overlay.drawSymbol(234+160, 162, '/');
-      this.overlay.drawNumber(266+160, 162, this.stats.monsters_total, 3);
-    }
-  }
-
-  /**
-   * Draws a mini info bar at the top of the screen with game stats and level name.
-   * @param {number} offsetY vertical offset for the mini info bar
-   */
-  #drawMiniInfo(offsetY = 0) {
-    this.sbar.drawPic(0, offsetY, backgrounds.scorebar);
-
-    const monsters = `Monsters: ${this.stats.monsters_killed} / ${this.stats.monsters_total}`;
-    const secrets = ` Secrets: ${this.stats.secrets_found} / ${this.stats.secrets_total}`;
-
-    this.sbar.drawString(8, offsetY + 4,  `${monsters.padEnd(19)} ${Q.secsToTime(this.engine.CL.gametime).padStart(18)}`);
-    this.sbar.drawString(8, offsetY + 12, `${secrets.padEnd(19)} ${new String(this.engine.CL.levelname).trim().padStart(18)}`.substring(0, 38));
+    this.#drawAccountBalance();
+    this.#drawRoundStats();
+    this.#drawBuyMenu();
   }
 
   #drawBuyMenu() {
@@ -597,7 +78,9 @@ export default class HUD {
       return; // no money to display
     }
 
-    if (this.stats.phase !== phases.quiet) {
+    const stats = /** @type {HellwaveStatsInfo} */ (this.stats);
+
+    if (stats.phase !== phases.quiet) {
       return; // only show money in quiet phase
     }
 
@@ -617,196 +100,21 @@ export default class HUD {
   }
 
   #drawRoundStats() {
+    const stats = /** @type {HellwaveStatsInfo} */ (this.stats);
+
     // in quiet phase, we show the timer
-    if (this.stats.phase === phases.quiet) {
-      const roundString = `${this.stats.round_current} / ${this.stats.round_total}`;
+    if (stats.phase === phases.quiet) {
+      const roundString = `${stats.round_current} / ${stats.round_total}`;
       this.sbar.drawString(this.sbar.width - roundString.length * 16, -48, roundString, 2.0);
 
-      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -80, Q.secsToTime(this.stats.phase_ending_time - this.engine.CL.gametime), 2.0);
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -80, Q.secsToTime(stats.phase_ending_time - this.engine.CL.gametime), 2.0);
     } else {
-      if (this.stats.phase === phases.normal || this.stats.phase === phases.action) {
-        const waveString = `${this.stats.monsters_killed} / ${this.stats.round_monsters_limit}`;
+      if (stats.phase === phases.normal || stats.phase === phases.action) {
+        const waveString = `${stats.monsters_killed} / ${stats.round_monsters_limit}`;
         this.sbar.drawString(this.sbar.width - waveString.length * 16, -48, waveString, 2.0);
       }
 
-      this.sbar.drawString(0, -48, phases[this.stats.phase] || '', 2.0);
+      this.sbar.drawString(0, -48, phases[stats.phase] || '', 2.0);
     }
-  }
-
-  draw() {
-    if (this.intermission.running) {
-      if (this.engine.CL.maxclients > 1) {
-        this.#drawScoreboard();
-      } else {
-        this.#drawIntermission();
-      }
-      return;
-    }
-
-    if (HUD.#showScoreboard) {
-      if (this.engine.CL.maxclients > 1) {
-        this.#drawScoreboard();
-      } else {
-        if (this.engine.SCR.viewsize === 120 || this.engine.SCR.viewsize <= 100) {
-          this.#drawInventory(-24);
-        }
-        this.#drawMiniInfo();
-        return;
-      }
-    }
-
-    if (this.engine.SCR.viewsize <= 100) {
-      this.#drawInventory(-24);
-    }
-
-    if (this.game.clientdata.spectating) {
-      // TODO: show spectator info, indicating the player is spectating
-    } else {
-      this.#drawStatusBar();
-    }
-
-    this.#drawAccountBalance();
-    this.#drawRoundStats();
-    this.#drawBuyMenu();
-  }
-
-  #powerupFlash() {
-    const color = new Vector();
-
-    let isFlickering = true;
-
-    switch (true) {
-      case (this.game.clientdata.items & items.IT_QUAD) !== 0:
-        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_QUAD));
-        break;
-      case (this.game.clientdata.items & items.IT_INVULNERABILITY) !== 0:
-        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_INVULN));
-        break;
-      case (this.game.clientdata.items & items.IT_SUIT) !== 0:
-        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_SUIT));
-        isFlickering = false; // no flickering for suit
-        break;
-      case (this.game.clientdata.items & items.IT_INVISIBILITY) !== 0:
-        color.set(this.engine.IndexToRGB(colors.HUD_CSHIFT_POWERUP_INVIS));
-        break;
-    }
-
-    if (color.isOrigin()) {
-      return;
-    }
-
-    this.engine.ContentShift(contentShift.powerup, color, isFlickering ? 0.25 + Math.random() * 0.1 : 0.3);
-  }
-
-  startFrame() {
-    if (this.damage.damageReceived > 0) {
-      this.damage.damageReceived -= this.engine.CL.frametime * 25; // decrease damage over time
-
-      if (this.damage.damageReceived < 0) {
-        this.damage.damageReceived = 0;
-      }
-    }
-
-    this.#powerupFlash();
-  }
-
-  saveState() {
-    return {
-      damage: this.damage,
-      intermission: this.intermission,
-      stats: this.stats,
-    };
-  }
-
-  loadState(state) {
-    this.damage = Object.assign(this.damage, state.damage);
-    this.damage.attackOrigin = new Vector(...state.damage.attackOrigin);
-    this.intermission = Object.assign(this.intermission, state.intermission);
-    this.stats = Object.assign(this.stats, state.stats);
-  }
-
-  /**
-   * @param {number} width viewport width
-   * @param {number} height viewport height
-   */
-  #viewportResize(width, height) {
-    // TODO: scale is broken
-    // if (width > 1024 && height > 768) {
-    //   this.gfx.scale = 1.5;
-    // }
-
-    this.sbar.offsets[0] = Math.floor(width / 2 - this.sbar.width / 2);
-    this.sbar.offsets[1] = Math.floor(height - this.sbar.height);
-
-    /** making sure we vertically center the box within the view height, not the full height */
-    const viewHeight = height - Math.floor((20 - Math.max(0, this.engine.SCR.viewsize - 100)) * 2.4);
-
-    this.overlay.offsets[0] = Math.floor((width - this.overlay.width) / 2);
-    this.overlay.offsets[1] = Math.floor((viewHeight - this.overlay.height) / 2);
-  }
-
-  /**
-   * @param {ClientEngineAPI} engineAPI client engine API
-   */
-  static Init(engineAPI) {
-    backgrounds.statusbar = engineAPI.LoadPicFromWad('SBAR');
-    backgrounds.inventorybar = engineAPI.LoadPicFromWad('IBAR');
-    backgrounds.scorebar = engineAPI.LoadPicFromWad('SCOREBAR');
-
-    faces.face_invis = engineAPI.LoadPicFromWad('FACE_INVIS');
-    faces.face_invuln = engineAPI.LoadPicFromWad('FACE_INVUL2');
-    faces.face_invis_invuln = engineAPI.LoadPicFromWad('FACE_INV2');
-    faces.face_quad = engineAPI.LoadPicFromWad('FACE_QUAD');
-
-    for (let i = 0; i < 5; i++) {
-      faces.faces[i][0] = engineAPI.LoadPicFromWad(`FACE${5 - i}`);
-      faces.faces[i][1] = engineAPI.LoadPicFromWad(`FACE_P${5 - i}`);
-    }
-
-    ammos.ammo_shells = engineAPI.LoadPicFromWad('SB_SHELLS');
-    ammos.ammo_nails = engineAPI.LoadPicFromWad('SB_NAILS');
-    ammos.ammo_rockets = engineAPI.LoadPicFromWad('SB_ROCKET');
-    ammos.ammo_cells = engineAPI.LoadPicFromWad('SB_CELLS');
-
-    armors.armor1 = engineAPI.LoadPicFromWad('SB_ARMOR1');
-    armors.armor2 = engineAPI.LoadPicFromWad('SB_ARMOR2');
-    armors.armor3 = engineAPI.LoadPicFromWad('SB_ARMOR3');
-
-    labels.ranking = engineAPI.LoadPicFromLump('ranking');
-    labels.complete = engineAPI.LoadPicFromLump('complete');
-    labels.inter = engineAPI.LoadPicFromLump('inter');
-    labels.finale = engineAPI.LoadPicFromLump('finale');
-
-    for (const weapon of inventory) {
-      if (weapon.iconPrefix === 'INV') {
-        weapon.icon = engineAPI.LoadPicFromWad(`INV2_${weapon.iconSuffix}`);
-        weapon.iconInactive = engineAPI.LoadPicFromWad(`INV_${weapon.iconSuffix}`);
-      } else {
-        weapon.icon = engineAPI.LoadPicFromWad(`${weapon.iconPrefix}_${weapon.iconSuffix}`);
-        weapon.iconInactive = weapon.icon; // no inactive icon for keys
-      }
-
-      weapon.iconWidth = weapon.icon.width;
-    }
-
-    engineAPI.RegisterCommand('+showscores', () => { this.#showScoreboard = true; });
-    engineAPI.RegisterCommand('-showscores', () => { this.#showScoreboard = false; });
-
-    Gfx.loadAssets(engineAPI);
-  }
-
-  /**
-   * @param {ClientEngineAPI} engineAPI client engine API
-   */
-  static Shutdown(engineAPI) {
-    for (const [key, texture] of Object.entries(backgrounds)) {
-      if (texture) {
-        texture.free();
-        backgrounds[key] = null;
-      }
-    }
-
-    engineAPI.UnregisterCommand('+showscores');
-    engineAPI.UnregisterCommand('-showscores');
   }
 };
