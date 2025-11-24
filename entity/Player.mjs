@@ -1,20 +1,36 @@
 import Vector from '../../../shared/Vector.mjs';
-import { channel, clientEvent, flags, items, moveType, solid } from '../Defs.mjs';
+import { channel, clientEvent, flags, formatMoney, items, moveType, solid } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
 import { ServerGameAPI } from '../GameAPI.mjs';
-import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
+import { BaseItemEntity, HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
 import { PlayerEntity } from '../../id1/entity/Player.mjs';
 import { Backpack } from '../../id1/entity/Weapons.mjs';
-import { BackpackEntity } from './Items.mjs';
+import { HellwaveBackpackEntity } from './Items.mjs';
 
 /** @typedef {import('../../../shared/GameInterfaces').ServerEdict} ServerEdict */
 /** @typedef {import('../../../shared/GameInterfaces').ServerEngineAPI} ServerEngineAPI */
 
 export const buyMenuItems = {
-  1: { cost: 100, label: 'Heavy Armor', entityClass: HeavyArmorEntity },
+  // heavy armor
+  1: { cost: 100, label: 'Heavy Armor', entityClass: HeavyArmorEntity,
+    available(/** @type {HellwavePlayer} */ playerEntity) {
+      return playerEntity.armorvalue < 200;
+    },
+  },
 
-  2: { cost: 200, label: 'Shotgun / 20 shells', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 } },
-  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun, backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 } },
+  // shotgun or 20 shells
+  2: { cost: 200, label: 'Shotgun / 20 shells', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 },
+    available(/** @type {HellwavePlayer} */ playerEntity) {
+      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    },
+  },
+
+  // super shotgun or 50 shells
+  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun, backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 },
+    available(/** @type {HellwavePlayer} */ playerEntity) {
+      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    },
+  },
 
   4: { cost: 1000, label: 'Nailgun', entityClass: WeaponNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 100 } },
   5: { cost: 3000, label: 'Super Nailgun', entityClass: WeaponSuperNailgun, backpack: { items: items.IT_NAILS, ammo_nails: 200 } },
@@ -22,9 +38,13 @@ export const buyMenuItems = {
   6: { cost: 5000, label: 'Grenade Launcher', entityClass: WeaponGrenadeLauncher },
   7: { cost: 5000, label: 'Rocket Launcher', entityClass: WeaponRocketLauncher },
 
-  8: { cost: 8000, label: 'Thunderbolt', entityClass: WeaponThunderbolt, backpack: { items: items.IT_CELLS, ammo_cells: 200 } },
+  8: { cost: 8000, label: 'Thunderbolt', entityClass: WeaponThunderbolt, backpack: { items: items.IT_CELLS, ammo_cells: 300 } },
 
   9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
+};
+
+export class HellwaveBackpack extends Backpack {
+  money = 0;
 };
 
 export default class HellwavePlayer extends PlayerEntity {
@@ -48,6 +68,13 @@ export default class HellwavePlayer extends PlayerEntity {
     'buyzone',
     'spectating',
   ];
+
+  static _backpackLimits = Object.assign({}, PlayerEntity._backpackLimits, {
+    ammo_shells: 500,
+    ammo_nails: 500,
+    ammo_rockets: 200,
+    ammo_cells: 600,
+  });
 
   _respawn() {
     switch (/** @type {ServerGameAPI} */(this.game).manager.phase) {
@@ -124,11 +151,11 @@ export default class HellwavePlayer extends PlayerEntity {
 
   /** @protected */
   _dropBackpack() {
-    const moneyToDrop = Math.min(300, this.money); // money capped to 300 per backpack
+    const moneyToDrop = Math.min(1000, this.money); // money capped to 1000 per backpack
 
-    const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
+    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
       origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)),
-      items: this.weapon,
+      items: this.items & (items.IT_LIGHTNING | items.IT_SUPER_NAILGUN | items.IT_NAILGUN | items.IT_ROCKET_LAUNCHER | items.IT_GRENADE_LAUNCHER | items.IT_SUPER_SHOTGUN | items.IT_SHOTGUN),
       ammo_cells: this.ammo_cells,
       ammo_nails: this.ammo_nails,
       ammo_rockets: this.ammo_rockets,
@@ -158,8 +185,17 @@ export default class HellwavePlayer extends PlayerEntity {
 
     const { forward } = this.angles.angleVectors();
 
-    const backpack = /** @type {BackpackEntity} */ (this.engine.SpawnEntity(BackpackEntity.classname, {
-      origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)).add(forward.multiply(64.0)),
+    const origin = this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)).add(forward.multiply(64.0));
+
+    const trace = this.traceline(this.origin, origin, false);
+
+    if (trace.fraction < 1.0) {
+      origin.set(trace.point);
+      origin.add(trace.plane.normal.copy().multiply(4.0));
+    }
+
+    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
+      origin,
       angles: this.angles.copy(),
       money: 100,
       regeneration_time: 0, // do not regenerate
@@ -170,10 +206,15 @@ export default class HellwavePlayer extends PlayerEntity {
     this.updateMoney(-backpack.money);
   }
 
-  applyBackpack(backpack) {
+  applyBackpack(/** @type {BaseItemEntity | HellwaveBackpackEntity} */ backpack) {
     let backpackUsed = super.applyBackpack(backpack);
 
-    if (backpack.money > 0) {
+    if (backpack.owner && !backpack.owner.equals(this)) {
+      // backpack already owned by this player (bought from the buyzone)
+      return false;
+    }
+
+    if (backpack instanceof HellwaveBackpackEntity && backpack.money > 0) {
       this.updateMoney(backpack.money);
       backpackUsed = true;
     }
@@ -227,6 +268,13 @@ export default class HellwavePlayer extends PlayerEntity {
         this._buyMenuRequested();
         this.impulse = 0;
         break;
+
+      case 101: // money cheat
+        if (this._canUseCheats()) {
+          this.updateMoney(10000);
+        }
+        this.impulse = 0;
+        break;
     }
 
     if (this.buyzone === 2 && this.impulse > 0 && this.impulse <= 9) {
@@ -265,15 +313,22 @@ export default class HellwavePlayer extends PlayerEntity {
   }
 
   _buyMenuPurchase(item) {
+    // TODO: send events to client instead
+
     const menuItem = buyMenuItems[item];
 
     if (!menuItem) {
-      this.consolePrint('invalid buy menu item ' + item + '\n');
+      this.consolePrint('invalid buy menu item ' + item + '!\n');
+      return;
+    }
+
+    if (menuItem.available && !menuItem.available(this)) {
+      this.centerPrint('you already have ' + menuItem.label);
       return;
     }
 
     if (this.money < menuItem.cost) {
-      this.consolePrint('not enough money to buy item ' + item + ', need ' + menuItem.cost + '\n');
+      this.centerPrint('you need ' + formatMoney(menuItem.cost) + ' to buy that !');
       return;
     }
 
@@ -283,15 +338,16 @@ export default class HellwavePlayer extends PlayerEntity {
     // spawn entity to pick up
     if (menuItem.entityClass) {
       this.engine.SpawnEntity(menuItem.entityClass.classname, {
-        origin: this.origin.copy(),
+        origin: this.origin.copy().add(this.view_ofs),
         angles: this.angles.copy(),
+        owner: this, // make it only consumable by this player
         spawnflags: menuItem.spawnflags || 0,
       });
     }
 
     // apply backpack
     if (menuItem.backpack) {
-      if (this.applyBackpack(Object.assign(new Backpack(), menuItem.backpack))) {
+      if (this.applyBackpack(Object.assign(new HellwaveBackpack(), menuItem.backpack))) {
         this.startSound(channel.CHAN_WEAPON, 'weapons/lock4.wav');
       }
     }

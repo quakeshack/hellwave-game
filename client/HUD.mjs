@@ -2,7 +2,7 @@ import Q from '../../../shared/Q.mjs';
 import Vector from '../../../shared/Vector.mjs';
 
 import { buyMenuItems } from '../entity/Player.mjs';
-import { clientEvent, clientEventName, colors, contentShift } from '../Defs.mjs';
+import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
 import { Q1HUD } from '../../../game/id1/client/HUD.mjs';
 import { HellwaveStatsInfo } from './Sync.mjs';
@@ -67,7 +67,7 @@ export default class HellwaveHUD extends Q1HUD {
 
       for (const [impulse, item] of Object.entries(buyMenuItems)) {
         if (item.cost <= this.inventory.money[0]) {
-          this.sbar.drawString(0, startY + 24 + 16 * +impulse, `[${impulse}] ${`Q${item.cost}`.padStart(5)} - ${item.label}`, 2.0);
+          this.sbar.drawString(0, startY + 24 + 16 * +impulse, `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`, 2.0);
         }
       }
     }
@@ -95,7 +95,7 @@ export default class HellwaveHUD extends Q1HUD {
       } else if (newBalance < oldBalance) {
         color[1] = color[2] = colorComponent;
       }
-      this.sbar.drawString(0, -48, `Q${newBalance}`, 2.0, color);
+      this.sbar.drawString(0, -48, formatMoney(newBalance), 2.0, color);
     }
   }
 

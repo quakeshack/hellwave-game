@@ -38,3 +38,6 @@ export const clientEvent = Object.assign({}, id1.clientEvent, Object.freeze({
   NAV_HINT: 203,
 }));
 
+export const formatMoney = function(/** @type {number} */ amount) {
+  return 'Q' + amount.toFixed(0);
+};

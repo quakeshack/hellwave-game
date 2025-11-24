@@ -1,4 +1,5 @@
 import Vector from '../../shared/Vector.mjs';
+import BaseEntity from '../id1/entity/BaseEntity.mjs';
 import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from '../id1/entity/Items.mjs';
 import { TeleportEffectEntity } from '../id1/entity/Misc.mjs';
 import BaseMonster from '../id1/entity/monster/BaseMonster.mjs';
@@ -15,6 +16,7 @@ import { clientEvent, items } from './Defs.mjs';
 import HellwavePlayer from './entity/Player.mjs';
 import { BuyZoneEntity } from './entity/Zones.mjs';
 import { ServerGameAPI } from './GameAPI.mjs';
+import HellwaveStats from './helper/HellwaveStats.mjs';
 
 /** @enum {string} @readonly */
 export const phases = Object.freeze({
@@ -43,14 +45,14 @@ const gameRoundMonsterMatrix = {
   3: [
     { classname: ArmySoldierMonster.classname, probability: 0.2 },
     { classname: WizardMonsterEntity.classname, probability: 0.2 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 3 },
     { classname: ZombieMonster.classname, probability: 0.2 },
     { classname: KnightMonster.classname, probability: 0.5 },
     { classname: HellKnightMonster.classname, probability: 0.2, limit: 3 },
   ],
   4: [
     { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 5 },
     { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
     { classname: ZombieMonster.classname, probability: 0.5 },
     { classname: KnightMonster.classname, probability: 1.0 },
@@ -222,7 +224,7 @@ export default class GameManager {
       }
     });
 
-    this.engine.eventBus.subscribe('game.monster.killed', (monster, attacker) => {
+    this.engine.eventBus.subscribe('game.monster.killed', (/** @type {BaseMonster} */ monster, /** @type {BaseEntity} */ attacker) => {
       if (attacker instanceof HellwavePlayer) {
         attacker.updateMoney(100); // TODO: different money for different monsters
         attacker.frags++;
@@ -232,6 +234,9 @@ export default class GameManager {
           this.available_goodies--;
         }
       }
+
+      // remove the monster corpse after some time
+      monster._scheduleThink(this.game.time + Math.random() * 10.0 + 5.0, function () { this.remove(); });
 
       // bump the navigation hint each time
       this.next_hint_time = this.game.time + 15.0;
@@ -257,6 +262,11 @@ export default class GameManager {
     item.toss();
   }
 
+  /**
+   * Drops a goodie item from a killed monster.
+   * @param {BaseMonster} monster killed monster
+   * @param {HellwavePlayer} attacker player who killed the monster
+   */
   dropGoodie(monster, attacker) {
     if (attacker.health < 25) {
       this.dropItem(HealthItemEntity.classname, monster.origin);
@@ -382,16 +392,25 @@ export default class GameManager {
       return; // no monster selected
     }
 
-    // spawn a zombie monster
+    // initalize a random facing angle
+    const angles = new Vector(0, Math.random() * 360.0, 0);
+
+    // if we have a valid goalentity, face towards it
+    if (goalentity) {
+      const direction = goalentity.origin.copy().subtract(origin);
+
+      angles.set(direction.toAngles());
+    }
+
+    // spawn the selected monster
     const enemy = /** @type {BaseMonster} */ (this.engine.SpawnEntity(selectedChoice.classname, {
       origin,
       enemy: goalentity,
-      // TODO: facing angle (should face player)
+      angles,
     }).entity);
 
+    // spawn a teleport effect
     this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
-
-    // console.debug(`spawned enemy ${enemy} at ${origin} goal ${goalentity}`, enemy);
 
     // send off into the world
     if (goalentity !== null) {
@@ -452,6 +471,10 @@ export default class GameManager {
 
       if (start.distanceTo(end) < 128.0) {
         continue; // too close
+      }
+
+      if (this.engine.Traceline(start, end, 0, player.edict).fraction === 1.0) {
+        continue; // clear line of sight
       }
 
       const navpath = this.engine.Navigate(start, end);
@@ -545,8 +568,7 @@ export default class GameManager {
 
     // cleaning up all the corpses
     for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
-      const entity = /** @type {BaseMonster} */(edict.entity);
-      entity._scheduleThink(this.game.time + Math.random() * 5.0 + 2.5, function () { this.remove(); });
+      edict.entity.lazyRemove();
     }
 
     this.round_number++;
@@ -690,21 +712,21 @@ export default class GameManager {
       squadStanding++;
     }
 
-    this.game.stats.updateSquadStats(squadStanding, squadTotal); // TODO: turn into an event
+    /** @type {HellwaveStats} */ (this.game.stats).updateSquadStats(squadStanding, squadTotal); // TODO: turn into an event
 
     if (squadTotal <= 0) {
-      this.engine.ConsolePrint('no players left in the game\n');
+      this.engine.ConsolePrint('no players left in the game, resetting game\n');
       this.resetGame();
       return;
     }
 
     if (squadStanding <= 0) {
-      this.engine.ConsolePrint('all players are dead\n');
+      this.engine.ConsolePrint('no one survived, game over\n');
       this.startGameOverPhase();
       return;
     }
 
-    this.engine.ConsolePrint(`squad standing ${squadStanding}/${squadTotal}\n`);
+    this.engine.ConsolePrint(`squad still standing with ${squadStanding} of ${squadTotal}\n`);
   }
 
   #initGame() {

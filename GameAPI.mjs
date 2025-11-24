@@ -1,9 +1,10 @@
 import { cvarFlags } from '../../shared/Defs.mjs';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
 import EntityRegistry from '../id1/helper/Registry.mjs';
-import { BackpackEntity } from './entity/Items.mjs';
+import { HealthItemEntity, HellwaveBackpackEntity } from './entity/Items.mjs';
 import HellwavePlayer from './entity/Player.mjs';
 import { WallEntity } from './entity/Props.mjs';
+import { Superspike } from './entity/Weapons.mjs';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.mjs';
 import GameManager from './GameManager.mjs';
 import HellwaveStats from './helper/HellwaveStats.mjs';
@@ -13,12 +14,14 @@ import HellwaveStats from './helper/HellwaveStats.mjs';
 
 const entityClasses = [].concat(id1EntityClasses, [
   HellwavePlayer,
-  BackpackEntity,
+  HellwaveBackpackEntity,
+  HealthItemEntity,
   WallEntity,
   BuyZoneEntity,
   BuyZoneShuttersEntity,
   MonstersSpawnZoneEntity,
   PlayersSpawnZoneEntity,
+  Superspike,
 ]);
 
 export class ServerGameAPI extends id1ServerGameAPI {
@@ -71,7 +74,7 @@ export class ServerGameAPI extends id1ServerGameAPI {
   _precacheResources() {
     super._precacheResources();
 
-    // we almost spawn all entities dynamically
+    // we almost spawn all entities dynamically, we can force a precache for all of them
     for (const entityClass of ServerGameAPI._entityRegistry.getAll()) {
       if (entityClass.classname.startsWith('item_key')) {
         continue;
@@ -84,6 +87,9 @@ export class ServerGameAPI extends id1ServerGameAPI {
         new entityClass(null, this); // forces a precache
       }
     }
+
+    // some of the precaches are dependent on the entity configuration, so we need to precache them here explicitly
+    this.engine.PrecacheModel('maps/b_bh100.bsp'); // mega health model
   }
 
   startFrame() {
