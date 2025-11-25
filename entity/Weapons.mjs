@@ -14,13 +14,13 @@ export class Superspike extends id1Superspike {
 
     this._serializer.startFields();
     this._direction = new Vector();
-    this._richochetsLeft = 1;
+    this._richochetsLeft = 3;
     this._serializer.endFields();
   }
 
   _handleImpact(touchedByEntity) {
     if (!touchedByEntity.isActor() && this._richochetsLeft > 0) {
-      const target = this._direction.copy().multiply(16.0);
+      const target = this._direction.copy().multiply(16.0).add(this.origin);
       const trace = this.traceline(this.origin, target, true);
 
       if (trace.solid && trace.plane) {
@@ -29,9 +29,8 @@ export class Superspike extends id1Superspike {
 
         const dot = d.dot(n);
 
-        if (Math.abs(dot) < Math.sin(5 * Math.PI / 180)) {
+        if (Math.abs(dot) < Math.sin(22.5 * Math.PI / 180)) {
           const reflected = d.copy().subtract(n.copy().multiply(2 * dot));
-          reflected.normalize();
           d.set(reflected);
 
           this.angles.set(d.toAngles());
