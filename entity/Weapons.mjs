@@ -19,6 +19,13 @@ export class Superspike extends id1Superspike {
   }
 
   _handleImpact(touchedByEntity) {
+    // make sure we get removed if we stop moving for whatever reason
+    this._scheduleThink(this.game.time + 0.1, () => {
+      if (this.velocity.len() < 1) {
+        this.remove();
+      }
+    });
+
     if (!touchedByEntity.isActor() && this._richochetsLeft > 0) {
       const target = this._direction.copy().multiply(16.0).add(this.origin);
       const trace = this.traceline(this.origin, target, true);
