@@ -6,6 +6,7 @@ import { clientEvent, clientEventName, colors, contentShift, formatMoney } from 
 import { phases } from '../GameManager.mjs';
 import { Q1HUD } from '../../../game/id1/client/HUD.mjs';
 import { HellwaveStatsInfo } from './Sync.mjs';
+import { ClientGameAPI } from '../main.mjs';
 
 export default class HellwaveHUD extends Q1HUD {
   _newStats() {
@@ -15,11 +16,21 @@ export default class HellwaveHUD extends Q1HUD {
   _subscribeToEvents() {
     super._subscribeToEvents();
 
-    // eslint-disable-next-line no-unused-vars
     this.engine.eventBus.subscribe(clientEventName(clientEvent.STATS_UPDATED), (slot, value) => {
+      const game = /** @type {ClientGameAPI} */ (this.game);
+
       if (slot === 'phase') {
-        this.engine.LoadSound('misc/talk.wav').play();
         this.engine.ContentShift(contentShift.info, this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH), 0.2);
+
+        switch (value) {
+          case phases.quiet:
+            game.sfx.phase.quiet[Math.floor(Math.random() * game.sfx.phase.quiet.length)].play();
+            break;
+
+          case phases.normal:
+            game.sfx.phase.normal[Math.floor(Math.random() * game.sfx.phase.normal.length)].play();
+            break;
+        }
       }
     });
 

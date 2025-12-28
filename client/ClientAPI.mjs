@@ -28,6 +28,13 @@ export class ClientGameAPI extends id1ClientGameAPI {
     spectating: false,
   };
 
+  sfx = {
+    phase: {
+      quiet: /** @type {import('source/shared/GameInterfaces').SFX[]} */ ([]),
+      normal: /** @type {import('source/shared/GameInterfaces').SFX[]} */ ([]),
+    },
+  };
+
   _newHUD() {
     return new HellwaveHUD(this, this.engine);
   }
@@ -51,6 +58,11 @@ export class ClientGameAPI extends id1ClientGameAPI {
         this.engine.RocketTrail(points[i - 1], points[i], 7);
       }
     });
+
+    // preload sounds
+    this.sfx.phase.quiet.push(this.engine.LoadSound('phase/quiet.mp3'));
+    this.sfx.phase.normal.push(this.engine.LoadSound('phase/normal-1.mp3'));
+    this.sfx.phase.normal.push(this.engine.LoadSound('phase/normal-2.mp3'));
   }
 
   static IsServerCompatible(version) {
