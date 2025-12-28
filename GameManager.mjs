@@ -735,6 +735,7 @@ export default class GameManager {
   }
 
   resetGame() {
+    // FIXME: this causes a “Only the server may changelevel” warning when a client hosted server is shut down
     this.engine.ChangeLevel(this.game.mapname);
   }
 };

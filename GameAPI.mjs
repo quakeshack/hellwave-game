@@ -107,6 +107,7 @@ export class ServerGameAPI extends id1ServerGameAPI {
 
   ClientDisconnect(clientEdict) {
     const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
+    playerEntity.disconnected();
 
     this.manager.clientDisconnected(playerEntity);
   }
