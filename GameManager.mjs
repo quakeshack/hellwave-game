@@ -20,12 +20,18 @@ import HellwaveStats from './helper/HellwaveStats.mjs';
 
 /** @enum {string} @readonly */
 export const phases = Object.freeze({
-  waiting: 'waiting', // waiting for players
-  quiet: 'quiet', // players can spawn, no monsters
-  normal: 'normal', // monsters spawn normally
-  action: 'action', // monsters spawn more frequently
-  gameover: 'gameover', // game over, waiting for intermission
-  victory: 'victory', // all rounds complete, waiting for intermission
+  /** waiting for players */
+  waiting: 'waiting',
+  /** players can spawn, no monsters */
+  quiet: 'quiet',
+  /** monsters spawn normally */
+  normal: 'normal',
+  /** monsters spawn more frequently */
+  action: 'action',
+  /** game over, waiting for intermission */
+  gameover: 'gameover',
+  /** all rounds complete, waiting for intermission */
+  victory: 'victory',
 });
 
 const gameRoundMonsterMatrix = {

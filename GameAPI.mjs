@@ -1,5 +1,5 @@
 import { cvarFlags } from '../../shared/Defs.mjs';
-import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
+import { featureFlags, entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
 import EntityRegistry from '../id1/helper/Registry.mjs';
 import { HealthItemEntity, HellwaveBackpackEntity } from './entity/Items.mjs';
 import HellwavePlayer from './entity/Player.mjs';
@@ -11,6 +11,12 @@ import HellwaveStats from './helper/HellwaveStats.mjs';
 
 /** @typedef {import("../../shared/GameInterfaces").Cvar} Cvar */
 /** @typedef {import("../../shared/GameInterfaces").ServerEngineAPI} ServerEngineAPI */
+
+// enable some features that stray from the original vanilla behavior
+featureFlags.push(
+  'draw-bullet-hole-decals',
+  'correct-ballistic-grenades',
+);
 
 const entityClasses = [].concat(id1EntityClasses, [
   HellwavePlayer,
