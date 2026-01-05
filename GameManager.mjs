@@ -330,12 +330,14 @@ export default class GameManager {
     const mins = new Vector(-16, -16, 0);
     const maxs = new Vector(16, 16, 16);
 
+    const spacer = new Vector(0, 0, 64);
+
     const offset = Math.floor(Math.random() * this.spawnpoints.length);
     for (let i = 0; i < this.spawnpoints.length; i++) {
       const spot = this.spawnpoints[(i + offset) % this.spawnpoints.length].copy();
 
       // this is an insane way to check whether the spot is free, but we have to trace from potentially outside the entity to inside, we simply assume there’s nothing above it
-      const trace = this.engine.Traceline(spot.copy().add([0, 0, 64.0]), spot, false, 0, mins, maxs);
+      const trace = this.engine.Traceline(spot.copy().add(spacer), spot, false, 0, mins, maxs);
 
       if (trace.fraction < 1.0) {
         continue; // spot is blocked
