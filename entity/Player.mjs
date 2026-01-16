@@ -328,7 +328,7 @@ export default class HellwavePlayer extends PlayerEntity {
     }
 
     if (this.money < menuItem.cost) {
-      this.centerPrint('you need ' + formatMoney(menuItem.cost) + ' to buy that !');
+      this.centerPrint('you need ' + formatMoney(menuItem.cost) + ' to buy that!');
       return;
     }
 

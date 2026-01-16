@@ -4,13 +4,21 @@ import Vector from '../../../shared/Vector.mjs';
 import { buyMenuItems } from '../entity/Player.mjs';
 import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
-import { Q1HUD } from '../../../game/id1/client/HUD.mjs';
+import { MessageBag, Q1HUD } from '../../../game/id1/client/HUD.mjs';
 import { HellwaveStatsInfo } from './Sync.mjs';
 import { ClientGameAPI } from '../main.mjs';
+
+class HellwaveMessageBag extends MessageBag {
+  _offset = [0, -64];
+}
 
 export default class HellwaveHUD extends Q1HUD {
   _newStats() {
     return new HellwaveStatsInfo(this.engine);
+  }
+
+  _newMessageBag() {
+    return new HellwaveMessageBag(this.engine, this.sbar);
   }
 
   _subscribeToEvents() {
