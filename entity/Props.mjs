@@ -20,7 +20,7 @@ export class WallEntity extends BaseWallEntity {
   spawn() {
     this._shownModel = this.model;
 
-    this.hide();
+    this.show();
   }
 
   show() {

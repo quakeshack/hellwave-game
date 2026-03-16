@@ -9,7 +9,7 @@ import { HellwaveStatsInfo } from './Sync.mjs';
 import { ClientGameAPI } from '../main.mjs';
 
 class HellwaveMessageBag extends MessageBag {
-  _offset = [0, -64];
+  _offset = /** @type {[number, number]} */ ([0, -64]);
 }
 
 export default class HellwaveHUD extends Q1HUD {
@@ -48,7 +48,7 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   inventory = {
-    /** @type {number[]} current account balance */
+    /** @type {[number, number, number]} current account balance [new balance, old balance, timestamp] */
     money: [null, null, -Infinity],
   };
 

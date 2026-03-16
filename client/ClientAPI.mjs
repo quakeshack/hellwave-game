@@ -6,6 +6,16 @@ import { clientEvent, clientEventName } from '../Defs.mjs';
 
 import HellwaveHUD from './HUD.mjs';
 
+// const keyCommands = Object.freeze({
+//   'invite': 'Invite your friends to the game',
+//   'impulse 20': 'Drop Q100 in a backpack',
+//   'impulse 21': 'Open buy menu',
+//   'impulse 10': 'Select previous weapon',
+//   'impulse 12': 'Select next weapon',
+//   'screenshot': 'Take a screenshot',
+//   'toggleconsole': 'Open the console',
+// });
+
 export class ClientGameAPI extends id1ClientGameAPI {
   /** current player’s data */
   clientdata = {
@@ -26,6 +36,8 @@ export class ClientGameAPI extends id1ClientGameAPI {
     buyzone: 0,
 
     spectating: false,
+
+    effects: 0,
   };
 
   sfx = {
@@ -34,6 +46,8 @@ export class ClientGameAPI extends id1ClientGameAPI {
       normal: /** @type {import('source/shared/GameInterfaces').SFX[]} */ ([]),
     },
   };
+
+  static loadingScreen = /** @type {import('source/shared/GameInterfaces').GLTexture} */(null);
 
   _newHUD() {
     return new HellwaveHUD(this, this.engine);
@@ -63,6 +77,57 @@ export class ClientGameAPI extends id1ClientGameAPI {
     this.sfx.phase.quiet.push(this.engine.LoadSound('phase/quiet.mp3'));
     this.sfx.phase.normal.push(this.engine.LoadSound('phase/normal-1.mp3'));
     this.sfx.phase.normal.push(this.engine.LoadSound('phase/normal-2.mp3'));
+  }
+
+  static Init(engineAPI) {
+    super.Init(engineAPI);
+
+    engineAPI.LoadPicFromFile('gfx/loadingscreen.png').then((/** @type {import('source/shared/GameInterfaces').GLTexture} */ tex) => {
+      tex.lockTextureMode('GL_LINEAR');
+      this.loadingScreen = tex;
+    }).catch(() => {
+      engineAPI.ConsoleWarning('Couldn\'t load loading screen picture.\n');
+    });
+
+    // engineAPI.SetPmoveConfiguration(pmoveConfig);
+  }
+
+  static Shutdown(engineAPI) {
+    super.Shutdown(engineAPI);
+
+    if (this.loadingScreen) {
+      this.loadingScreen.free();
+      this.loadingScreen = null;
+    }
+  }
+
+  drawLoading() {
+    const { width, height } = this.engine.VID;
+
+    if (!ClientGameAPI.loadingScreen) {
+      return;
+    }
+
+    this.engine.DrawPic((width - ClientGameAPI.loadingScreen.width * 0.8) / 2, (height - ClientGameAPI.loadingScreen.height * 0.8) / 2, ClientGameAPI.loadingScreen, 0.8);
+
+    // const rows = /** @type {string[]} */([]);
+
+    // for (const [command, description] of Object.entries(keyCommands)) {
+    //   const key = this.engine.Key.getKeyForBinding(command);
+
+    //   if (key) {
+    //     rows.push(`${`[${key.toUpperCase()}]`.padEnd(3).padStart(3)} ${description}`);
+    //   }
+    // }
+
+    // rows.push('');
+    // rows.push('Thank you for playing hellwave!');
+
+    // for (let i = 0; i < rows.length; i++) {
+    //   const row = rows[i];
+    //   const textWidth = row.length * 16;
+    //   this.engine.DrawString((width - textWidth) / 2, height * 0.75 + i * 16, row, 2.0);
+    // }
   }
 
   static IsServerCompatible(version) {
