@@ -19,6 +19,7 @@ import HellwaveHUD from './HUD.mjs';
 export class ClientGameAPI extends id1ClientGameAPI {
   /** current player’s data */
   clientdata = {
+    // Original fields
     health: 100,
     armorvalue: 0,
     armortype: 0,
@@ -29,6 +30,9 @@ export class ClientGameAPI extends id1ClientGameAPI {
     ammo_rockets: 0,
     ammo_cells: 0,
 
+    effects: 0,
+
+    // Hellwave-specific fields
     weapon: 0,
     weaponframe: 0,
 
@@ -36,8 +40,6 @@ export class ClientGameAPI extends id1ClientGameAPI {
     buyzone: 0,
 
     spectating: false,
-
-    effects: 0,
   };
 
   sfx = {
@@ -88,8 +90,6 @@ export class ClientGameAPI extends id1ClientGameAPI {
     }).catch(() => {
       engineAPI.ConsoleWarning('Couldn\'t load loading screen picture.\n');
     });
-
-    // engineAPI.SetPmoveConfiguration(pmoveConfig);
   }
 
   static Shutdown(engineAPI) {

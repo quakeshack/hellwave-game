@@ -1,3 +1,4 @@
+// import { PmoveQuake2Configuration } from '../../shared/Pmove.mjs';
 import { cvarFlags } from '../../shared/Defs.mjs';
 import { featureFlags, entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
 import EntityRegistry from '../id1/helper/Registry.mjs';
@@ -29,6 +30,8 @@ const entityClasses = [].concat(id1EntityClasses, [
   PlayersSpawnZoneEntity,
   Superspike,
 ]);
+
+// export const pmoveConfig = new PmoveQuake2Configuration();
 
 export class ServerGameAPI extends id1ServerGameAPI {
   static _entityRegistry = new EntityRegistry(entityClasses);
@@ -145,5 +148,36 @@ export class ServerGameAPI extends id1ServerGameAPI {
 
     // set the round limit
     this.manager.round_number_limit = Math.max(1, Math.min(12, ServerGameAPI._cvars.rounds.value));
+
+    // configure pmove
+    // this.engine.SetPmoveConfiguration(pmoveConfig);
+  }
+
+  static GetMapList() {
+    return [
+      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: [] },
+      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: [] },
+    ];
+  }
+
+  static GetStartServerList() {
+    return [
+      { label: 'Castle of the Damned', callback: (engineAPI) => engineAPI.AppendConsoleText(`
+          hostname "Hellwave: Castle of the Damned"
+          deathmatch 0
+          coop 1
+          samelevel 1
+          maxplayers 4
+          map hw_e1m2
+        `) },
+      { label: 'Doomed Computer Station', callback: (engineAPI) => engineAPI.AppendConsoleText(`
+          hostname "Hellwave: Doomed Computer Station"
+          deathmatch 0
+          coop 1
+          samelevel 1
+          maxplayers 4
+          map hw_doom
+        `) },
+    ];
   }
 };
