@@ -3,6 +3,7 @@ import sampleBSpline from '../../../shared/BSpline.mjs';
 
 import { ClientGameAPI as id1ClientGameAPI } from '../../id1/main.mjs';
 import { clientEvent, clientEventName } from '../Defs.mjs';
+import { ServerGameAPI } from '../GameAPI.mjs';
 
 import HellwaveHUD from './HUD.mjs';
 
@@ -15,6 +16,32 @@ import HellwaveHUD from './HUD.mjs';
 //   'screenshot': 'Take a screenshot',
 //   'toggleconsole': 'Open the console',
 // });
+
+class StartGameHandler {
+  constructor(engineAPI) {
+    /** @type {import('source/shared/GameInterfaces').ClientEngineAPI} */
+    this.engine = engineAPI;
+  }
+
+  startSingleplayerGame() {
+    const maps = ServerGameAPI.GetMapList().map((map) => map.name);
+
+    console.assert(maps.length > 0, 'MUST HAVE MAPS LOL');
+
+    // just start a random map, since the singleplayer mode is not the focus of the mod
+    this.engine.AppendConsoleText(`map ${maps[Math.floor(Math.random() * maps.length)]}\n`);
+  }
+
+  startMultiplayerGame(/** @type {string} */ mapname) {
+    this.engine.AppendConsoleText(`
+      deathmatch 0
+      coop 1
+      samelevel 1
+      maxplayers 4
+      map "${mapname}"
+    `);
+  }
+}
 
 export class ClientGameAPI extends id1ClientGameAPI {
   /** current player’s data */
@@ -90,6 +117,14 @@ export class ClientGameAPI extends id1ClientGameAPI {
     }).catch(() => {
       engineAPI.ConsoleWarning('Couldn\'t load loading screen picture.\n');
     });
+
+    // make sure we enable a few engine features
+    engineAPI.GetCvar('r_bloom').set(true);
+    engineAPI.GetCvar('r_bloom_downsample').set(8);
+    engineAPI.GetCvar('r_bloom_dlight_strength').set(0.33);
+    engineAPI.GetCvar('r_bloom_sky_strength').set(0.33);
+    engineAPI.GetCvar('r_bloom_specular_strength').set(0.33);
+    engineAPI.GetCvar('r_bloom_strength').set(1);
   }
 
   static Shutdown(engineAPI) {
@@ -128,6 +163,10 @@ export class ClientGameAPI extends id1ClientGameAPI {
     //   const textWidth = row.length * 16;
     //   this.engine.DrawString((width - textWidth) / 2, height * 0.75 + i * 16, row, 2.0);
     // }
+  }
+
+  static GetStartGameInterface(engineAPI) {
+    return new StartGameHandler(engineAPI);
   }
 
   static IsServerCompatible(version) {
