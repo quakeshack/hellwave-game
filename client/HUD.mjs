@@ -12,6 +12,30 @@ class HellwaveMessageBag extends MessageBag {
   _offset = /** @type {[number, number]} */ ([0, -64]);
 }
 
+/**
+ * @param {number} distance player distance from the camera
+ * @returns {number} HUD name scale clamped between near and far bounds
+ */
+function calculatePlayerNameScale(distance) {
+  const nearDistance = 64.0;
+  const farDistance = 512.0;
+  const maxScale = 2.0;
+  const minScale = 0.25;
+
+  if (distance <= nearDistance) {
+    return maxScale;
+  }
+
+  if (distance >= farDistance) {
+    return minScale;
+  }
+
+  const distanceFraction = (distance - nearDistance) / (farDistance - nearDistance);
+
+  return maxScale - distanceFraction * (maxScale - minScale);
+}
+
+
 export default class HellwaveHUD extends Q1HUD {
   _newStats() {
     return new HellwaveStatsInfo(this.engine);
@@ -69,6 +93,58 @@ export default class HellwaveHUD extends Q1HUD {
     this.#drawAccountBalance();
     this.#drawRoundStats();
     this.#drawBuyMenu();
+    this.#drawPlayerNames();
+  }
+
+  #drawPlayerNames() {
+    const entities = this.engine.GetVisibleEntities((ent) => ent.classname === 'player');
+
+    for (const entity of entities) {
+      const playerName = this.#getPlayerName(entity);
+
+      if (playerName === null) {
+        continue;
+      }
+
+      const distance = entity.origin.distanceTo(this.engine.CL.vieworigin);
+
+      if (distance > 512.0) {
+        continue; // too far away to draw name
+      }
+
+      const coords = this.engine.WorldToScreen(entity.origin.copy().add(new Vector(0.0, 0.0, 24.0)));
+
+      if (coords === null) {
+        continue;
+      }
+
+      const scale = calculatePlayerNameScale(distance);
+
+      const x = coords[0] - (playerName.length * 16 * scale) / 2;
+      const y = coords[1] - 48 * scale;
+
+      this.engine.DrawString(x, y, playerName, 2.0 * scale, new Vector(.7, .7, .7));
+    }
+  }
+
+  #getPlayerName(entity) {
+    if (entity === null) {
+      return null;
+    }
+
+    const scoreIndex = entity.num - 1;
+
+    if (scoreIndex < 0 || scoreIndex >= this.engine.CL.maxclients) {
+      return null;
+    }
+
+    if (entity.num === this.engine.CL.entityNum) {
+      return null;
+    }
+
+    const score = this.engine.CL.score(scoreIndex);
+
+    return score.isActive && score.name !== '' ? score.name : null;
   }
 
   #drawBuyMenu() {
