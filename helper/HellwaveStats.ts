@@ -1,25 +1,26 @@
-import GameStats from '../../../game/id1/helper/GameStats.ts';
-import { clientEvent } from '../Defs.mjs';
-import { phases } from '../GameManager.mjs';
+import type { GameStatsRecipient } from '../../id1/helper/GameStats.ts';
 
-// NOTE: keep in sync with server HellwaveStatsInfo
+import GameStats from '../../id1/helper/GameStats.ts';
+import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+
+import { clientEvent } from '../Defs.ts';
+import { phases, type HellwavePhase } from '../Phases.ts';
+
+/**
+ * Tracks Hellwave-specific round and squad state and mirrors it to clients.
+ * Keep the client-side sync code aligned with these slots.
+ */
+@entity
 export default class HellwaveStats extends GameStats {
-  /** current round number */
-  round_current = 0;
-  /** total rounds for the current session */
-  round_total = 0;
-  /** living players currently standing */
-  squad_standing = 0;
-  /** players expected to be in the squad */
-  squad_total = 0;
-  /** monster cap for the active round */
-  round_monsters_limit = 0;
-  /** @type {keyof typeof phases} current game phase */
-  phase = phases.waiting;
-  /** phase end timestamp in game seconds */
-  phase_ending_time = 0;
+  @serializable round_current = 0;
+  @serializable round_total = 0;
+  @serializable squad_standing = 0;
+  @serializable squad_total = 0;
+  @serializable round_monsters_limit = 0;
+  @serializable phase: HellwavePhase = phases.waiting;
+  @serializable phase_ending_time = 0;
 
-  reset() {
+  override reset(): void {
     super.reset();
 
     this.round_current = 0;
@@ -27,24 +28,21 @@ export default class HellwaveStats extends GameStats {
     this.squad_standing = 0;
     this.squad_total = 0;
     this.round_monsters_limit = 0;
-    /** @type {keyof typeof phases} */
     this.phase = phases.waiting;
-    /** @type {number} */
-    this.phase_ending_time = 0; // game.time + X, in seconds
+    this.phase_ending_time = 0;
   }
 
-  subscribeToEvents() {
+  override subscribeToEvents(): void {
     super.subscribeToEvents();
 
-    this.engine.eventBus.subscribe('game.round.started', (roundNumber, roundTotal, roundMonstersLimit) => {
-      this.round_current = /** @type {number} */(roundNumber);
-      this.round_total = /** @type {number} */(roundTotal);
-      this.round_monsters_limit = /** @type {number} */(roundMonstersLimit);
+    this.engine.eventBus.subscribe('game.round.started', (roundNumber: number, roundTotal: number, roundMonstersLimit: number): void => {
+      this.round_current = roundNumber;
+      this.round_total = roundTotal;
+      this.round_monsters_limit = roundMonstersLimit;
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_current', this.round_current);
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_total', this.round_total);
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'round_monsters_limit', this.round_monsters_limit);
 
-      // reset stats
       this.monsters_total = 0;
       this.monsters_killed = 0;
 
@@ -52,31 +50,22 @@ export default class HellwaveStats extends GameStats {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', this.monsters_killed);
     });
 
-    this.engine.eventBus.subscribe('game.phase.changed', (newPhase) => {
-      const phase = /** @type {keyof typeof phases} */(newPhase);
-
-      if (this.phase !== phase) {
-        this.phase = phase;
+    this.engine.eventBus.subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
+      if (this.phase !== newPhase) {
+        this.phase = newPhase;
         this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase', this.phase);
       }
     });
 
-    this.engine.eventBus.subscribe('game.phase.endingtime', (newEndingTime) => {
-      const endingTime = /** @type {number} */(newEndingTime);
-
-      if (this.phase_ending_time !== endingTime) {
-        this.phase_ending_time = endingTime;
+    this.engine.eventBus.subscribe('game.phase.endingtime', (newEndingTime: number): void => {
+      if (this.phase_ending_time !== newEndingTime) {
+        this.phase_ending_time = newEndingTime;
         this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase_ending_time', this.phase_ending_time);
       }
     });
   }
 
-  /**
-   * @param {number} squadStanding
-   * @param {number} squadTotal
-   * @returns {this} The stats instance for chaining.
-   */
-  updateSquadStats(squadStanding, squadTotal) {
+  updateSquadStats(squadStanding: number, squadTotal: number): this {
     if (this.squad_standing !== squadStanding) {
       this.squad_standing = squadStanding;
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'squad_standing', this.squad_standing);
@@ -90,15 +79,11 @@ export default class HellwaveStats extends GameStats {
     return this;
   }
 
-  /**
-   * @param {{ edict: import('../../../shared/GameInterfaces').ServerEdict | null }} playerEntity client player entity
-   */
-  sendToPlayer(playerEntity) {
+  override sendToPlayer(playerEntity: GameStatsRecipient): void {
     super.sendToPlayer(playerEntity);
 
-    const playerEdict = playerEntity.edict;
-    console.assert(playerEdict !== null, 'HellwaveStats.sendToPlayer requires a player edict');
-    const targetEdict = /** @type {import('../../../shared/GameInterfaces').ServerEdict} */ (playerEdict);
+    console.assert(playerEntity.edict !== null, 'HellwaveStats.sendToPlayer requires a player edict');
+    const targetEdict = playerEntity.edict!;
 
     this.engine.DispatchClientEvent(targetEdict, true, clientEvent.STATS_INIT, 'round_total', this.round_total);
     this.engine.DispatchClientEvent(targetEdict, true, clientEvent.STATS_INIT, 'round_current', this.round_current);
@@ -108,4 +93,4 @@ export default class HellwaveStats extends GameStats {
     this.engine.DispatchClientEvent(targetEdict, true, clientEvent.STATS_INIT, 'phase_ending_time', this.phase_ending_time);
     this.engine.DispatchClientEvent(targetEdict, true, clientEvent.STATS_INIT, 'round_monsters_limit', this.round_monsters_limit);
   }
-};
+}
