@@ -1,5 +1,5 @@
-import * as engine from '../../shared/Defs.mjs';
-import * as id1 from '../../game/id1/Defs.mjs';
+import * as engine from '../../shared/Defs.ts';
+import * as id1 from '../../game/id1/Defs.ts';
 
 export const solid = engine.solid;
 export const moveType = engine.moveType;

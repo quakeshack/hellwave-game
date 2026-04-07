@@ -1,5 +1,5 @@
-import Vector from '../../../shared/Vector.mjs';
-import { Superspike as id1Superspike } from '../../id1/entity/Weapons.mjs';
+import Vector from '../../../shared/Vector.ts';
+import { Superspike as id1Superspike } from '../../id1/entity/Weapons.ts';
 import { channel } from '../Defs.mjs';
 
 const ricochetSounds = /** @type {ReadonlyArray<string>} */ ([
@@ -8,7 +8,13 @@ const ricochetSounds = /** @type {ReadonlyArray<string>} */ ([
   'weapons/ric3.wav',
 ]);
 
-export class Superspike extends id1Superspike {
+export class HellwaveSuperspike extends id1Superspike {
+  /** @type {Vector} */
+  _direction = new Vector();
+
+  /** @type {number} */
+  _richochetsLeft = 3;
+
   _declareFields() {
     super._declareFields();
 
@@ -18,6 +24,7 @@ export class Superspike extends id1Superspike {
     this._serializer.endFields();
   }
 
+  /** @param {import('../../id1/entity/BaseEntity.ts').default} touchedByEntity */
   _handleImpact(touchedByEntity) {
     // make sure we get removed if we stop moving for whatever reason
     this._scheduleThink(this.game.time + 0.1, () => {

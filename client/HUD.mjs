@@ -1,12 +1,12 @@
-import Q from '../../../shared/Q.mjs';
-import Vector from '../../../shared/Vector.mjs';
+import Q from '../../../shared/Q.ts';
+import Vector from '../../../shared/Vector.ts';
 
 import { buyMenuItems } from '../entity/Player.mjs';
 import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
-import { MessageBag, Q1HUD } from '../../../game/id1/client/HUD.mjs';
+import { MessageBag, Q1HUD } from '../../../game/id1/client/HUD.ts';
 import { HellwaveStatsInfo } from './Sync.mjs';
-import { ClientGameAPI } from '../main.mjs';
+import { ClientGameAPI } from '../main.ts';
 
 class HellwaveMessageBag extends MessageBag {
   _offset = /** @type {[number, number]} */ ([0, -64]);

@@ -1,17 +1,17 @@
-import Vector from '../../shared/Vector.mjs';
-import BaseEntity from '../id1/entity/BaseEntity.mjs';
-import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from '../id1/entity/Items.mjs';
-import { TeleportEffectEntity } from '../id1/entity/Misc.mjs';
-import BaseMonster from '../id1/entity/monster/BaseMonster.mjs';
-import DogMonsterEntity from '../id1/entity/monster/Dog.mjs';
-import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.mjs';
-import OgreMonsterEntity from '../id1/entity/monster/Ogre.mjs';
-import { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.mjs';
-import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.mjs';
-import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.mjs';
-import WizardMonsterEntity from '../id1/entity/monster/Wizard.mjs';
-import ZombieMonster from '../id1/entity/monster/Zombie.mjs';
-import { Serializer } from '../id1/helper/MiscHelpers.mjs';
+import Vector from '../../shared/Vector.ts';
+import BaseEntity from '../id1/entity/BaseEntity.ts';
+import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from '../id1/entity/Items.ts';
+import { TeleportEffectEntity } from '../id1/entity/Misc.ts';
+import BaseMonster from '../id1/entity/monster/BaseMonster.ts';
+import DogMonsterEntity from '../id1/entity/monster/Dog.ts';
+import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.ts';
+import OgreMonsterEntity from '../id1/entity/monster/Ogre.ts';
+import { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.ts';
+import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.ts';
+import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.ts';
+import WizardMonsterEntity from '../id1/entity/monster/Wizard.ts';
+import ZombieMonster from '../id1/entity/monster/Zombie.ts';
+import { Serializer } from '../id1/helper/MiscHelpers.ts';
 import { clientEvent, items } from './Defs.mjs';
 import HellwavePlayer from './entity/Player.mjs';
 import { BuyZoneEntity } from './entity/Zones.mjs';
@@ -191,7 +191,7 @@ export default class GameManager {
 
     const zones = Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity));
 
-    const zone = /** @type {BuyZoneEntity?} */(zones[Math.floor(Math.random() * zones.length)]?.entity);
+    const zone = /** @type {BuyZoneEntity?} */(/** @type {unknown} */(zones[Math.floor(Math.random() * zones.length)]?.entity));
 
     if (zone) {
       zone.openShop();
@@ -203,7 +203,7 @@ export default class GameManager {
 
   closeShops() {
     for (const edict of Array.from(this.engine.FindAllByFilter((edict) => edict.entity instanceof BuyZoneEntity))) {
-      const zone = /** @type {BuyZoneEntity} */(edict.entity);
+      const zone = /** @type {BuyZoneEntity} */(/** @type {unknown} */(edict.entity));
       zone.closeShop();
     }
 
@@ -255,12 +255,12 @@ export default class GameManager {
    * @param {object} params optional additional spawn parameters
    */
   dropItem(entityClassname, origin, params = {}) {
-    const item = /** @type {BaseItemEntity} */(this.engine.SpawnEntity(entityClassname, {
+    const item = /** @type {BaseItemEntity} */(/** @type {unknown} */(this.engine.SpawnEntity(entityClassname, {
       origin: origin.copy(),
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 2 minutes
       ...params,
-    }).entity);
+    }).entity));
 
     console.assert(item instanceof BaseItemEntity, 'dropped item is not a BaseItemEntity');
 
@@ -337,7 +337,7 @@ export default class GameManager {
       const spot = this.spawnpoints[(i + offset) % this.spawnpoints.length].copy();
 
       // this is an insane way to check whether the spot is free, but we have to trace from potentially outside the entity to inside, we simply assume there’s nothing above it
-      const trace = this.engine.Traceline(spot.copy().add(spacer), spot, false, 0, mins, maxs);
+      const trace = this.engine.Traceline(spot.copy().add(spacer), spot, false, null, mins, maxs);
 
       if (trace.fraction < 1.0) {
         continue; // spot is blocked
@@ -354,7 +354,10 @@ export default class GameManager {
 
     this.spawn_next = this.game.time + (this.phase === phases.action ? 0.5 : 3.0);
 
-    const goalentity = this.engine.FindInRadius(origin, 4096.0, (edict) => edict.entity instanceof HellwavePlayer)[0]?.entity || null;
+    const goalentity = Array.from(this.engine.GetClients())
+      .map((edict) => /** @type {HellwavePlayer} */(/** @type {unknown} */(edict.entity)))
+      .filter((player) => !player.spectating && player.health > 0 && player.origin.distanceTo(origin) <= 4096.0)
+      .sort((a, b) => a.origin.distanceTo(origin) - b.origin.distanceTo(origin))[0] || null;
 
     // determine what to spawn
     const monsterChoices = gameRoundMonsterMatrix[Math.min(this.round_number, Math.max(...Object.keys(gameRoundMonsterMatrix).map((k) => parseInt(k, 10))))] || []; // TODO: default
@@ -411,18 +414,20 @@ export default class GameManager {
     }
 
     // spawn the selected monster
-    const enemy = /** @type {BaseMonster} */ (this.engine.SpawnEntity(selectedChoice.classname, {
+    const enemy = /** @type {BaseMonster} */ (/** @type {unknown} */(this.engine.SpawnEntity(selectedChoice.classname, {
       origin,
-      enemy: goalentity,
+      enemy: goalentity?.edict ?? null,
       angles,
-    }).entity);
+    }).entity));
 
     // spawn a teleport effect
     this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
 
+    // console.log('goalentity!', goalentity);
+
     // send off into the world
     if (goalentity !== null) {
-      enemy.hunt(goalentity);
+      enemy.hunt(/** @type {BaseEntity} */(/** @type {unknown} */(goalentity)));
     }
   }
 
@@ -436,7 +441,7 @@ export default class GameManager {
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
+      const player = /** @type {HellwavePlayer} */ (/** @type {unknown} */(clientEdict.entity));
 
       if (player.spectating || player.buyzone) {
         continue; // skip spectators and players already in the buyzone
@@ -461,14 +466,14 @@ export default class GameManager {
   }
 
   showLastEnemyHint() {
-    const lastMonster = Array.from(this.engine.FindAllByFilter((edict) => (edict.entity instanceof BaseMonster) && edict.entity.health > 0))[0]?.entity;
+    const lastMonster = /** @type {BaseMonster?} */(/** @type {unknown} */(Array.from(this.engine.FindAllByFilter((edict) => (edict.entity instanceof BaseMonster) && edict.entity.health > 0))[0]?.entity));
 
     if (!lastMonster) {
       return; // no monster found
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
+      const player = /** @type {HellwavePlayer} */ (/** @type {unknown} */(clientEdict.entity));
 
       if (player.spectating) {
         continue; // skip spectators
@@ -481,7 +486,7 @@ export default class GameManager {
         continue; // too close
       }
 
-      if (this.engine.Traceline(start, end, 0, player.edict).fraction === 1.0) {
+      if (this.engine.Traceline(start, end, false, /** @type {import('../../shared/GameInterfaces.ts').ServerEdict} */(/** @type {unknown} */(player.edict))).fraction === 1.0) {
         continue; // clear line of sight
       }
 
@@ -576,7 +581,7 @@ export default class GameManager {
 
     // cleaning up all the corpses
     for (const edict of this.engine.FindAllByFilter((edict) => edict.entity instanceof BaseMonster)) {
-      edict.entity.lazyRemove();
+      /** @type {BaseMonster} */(/** @type {unknown} */(edict.entity)).lazyRemove();
     }
 
     this.round_number++;
@@ -597,7 +602,7 @@ export default class GameManager {
 
     // make sure that we spawn all spectating players
     for (const clent of this.engine.GetClients()) {
-      const player = /** @type {HellwavePlayer} */(clent.entity);
+      const player = /** @type {HellwavePlayer} */(/** @type {unknown} */(clent.entity));
 
       if (!player.spectating) {
         continue; // not spectating
@@ -701,7 +706,7 @@ export default class GameManager {
     let squadTotal = 0, squadStanding = 0;
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = /** @type {HellwavePlayer} */ (clientEdict.entity);
+      const player = /** @type {HellwavePlayer} */ (/** @type {unknown} */(clientEdict.entity));
 
       if (skipPlayerEntity && player.equals(skipPlayerEntity)) {
         continue; // skip the leaving player

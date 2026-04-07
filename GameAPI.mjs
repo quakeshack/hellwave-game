@@ -1,17 +1,27 @@
-// import { PmoveQuake2Configuration } from '../../shared/Pmove.mjs';
-import { cvarFlags } from '../../shared/Defs.mjs';
-import { featureFlags, entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.mjs';
-import EntityRegistry from '../id1/helper/Registry.mjs';
-import { HealthItemEntity, HellwaveBackpackEntity } from './entity/Items.mjs';
+// import { PmoveQuake2Configuration } from '../../shared/Pmove.ts';
+import { cvarFlags } from '../../shared/Defs.ts';
+import { featureFlags, entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
+import EntityRegistry from '../id1/helper/Registry.ts';
+import { HellwaveBackpackEntity, HellwaveHealthItemEntity } from './entity/Items.mjs';
 import HellwavePlayer from './entity/Player.mjs';
 import { WallEntity } from './entity/Props.mjs';
-import { Superspike } from './entity/Weapons.mjs';
+import { HellwaveSuperspike } from './entity/Weapons.mjs';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.mjs';
 import GameManager from './GameManager.mjs';
 import HellwaveStats from './helper/HellwaveStats.mjs';
 
 /** @typedef {import("../../shared/GameInterfaces").Cvar} Cvar */
+/** @typedef {import('../../shared/GameInterfaces').ServerEdict} ServerEdict */
 /** @typedef {import("../../shared/GameInterfaces").ServerEngineAPI} ServerEngineAPI */
+/** @typedef {{ AppendConsoleText: function(string): void }} ConsoleTextAppender */
+/**
+ * @typedef {typeof id1ServerGameAPI._cvars & {
+ *   rounds: Cvar | null,
+ *   quiettime: Cvar | null,
+ *   normaltime: Cvar | null,
+ *   maxmonstersalive: Cvar | null,
+ *   debug_spawnpoints: Cvar | null,
+  }} HellwaveCvarMap */
 
 // enable some features that stray from the original vanilla behavior
 featureFlags.push(
@@ -19,24 +29,40 @@ featureFlags.push(
   'correct-ballistic-grenades',
 );
 
-const entityClasses = [].concat(id1EntityClasses, [
+const entityClasses = id1EntityClasses.concat(/** @type {typeof id1EntityClasses} */ ([
   HellwavePlayer,
   HellwaveBackpackEntity,
-  HealthItemEntity,
+  HellwaveHealthItemEntity,
   WallEntity,
   BuyZoneEntity,
   BuyZoneShuttersEntity,
   MonstersSpawnZoneEntity,
   PlayersSpawnZoneEntity,
-  Superspike,
-]);
+  HellwaveSuperspike,
+]));
+
+/**
+ * Require a connected hellwave player entity.
+ * @param {ServerEdict} clientEdict
+ * @returns {HellwavePlayer} Connected hellwave player.
+ */
+function expectHellwavePlayer(clientEdict) {
+  const playerEntity = clientEdict.entity;
+
+  if (!(playerEntity instanceof HellwavePlayer)) {
+    throw new TypeError('Expected HellwavePlayer entity');
+  }
+
+  return playerEntity;
+}
 
 // export const pmoveConfig = new PmoveQuake2Configuration();
 
 export class ServerGameAPI extends id1ServerGameAPI {
   static _entityRegistry = new EntityRegistry(entityClasses);
 
-  static _cvars = Object.assign({}, id1ServerGameAPI._cvars, {
+  static _cvars = /** @type {HellwaveCvarMap} */ ({
+    ...id1ServerGameAPI._cvars,
     rounds: null,
     quiettime: null,
     normaltime: null,
@@ -61,23 +87,28 @@ export class ServerGameAPI extends id1ServerGameAPI {
   }
 
   get rounds() {
-    return ServerGameAPI._cvars.rounds.value;
+    const rounds = ServerGameAPI._cvars.rounds;
+    return rounds?.value ?? 0;
   }
 
   get quiettime() {
-    return ServerGameAPI._cvars.quiettime.value;
+    const quiettime = ServerGameAPI._cvars.quiettime;
+    return quiettime?.value ?? 0;
   }
 
   get normaltime() {
-    return ServerGameAPI._cvars.normaltime.value;
+    const normaltime = ServerGameAPI._cvars.normaltime;
+    return normaltime?.value ?? 0;
   }
 
   get maxmonstersalive() {
-    return ServerGameAPI._cvars.maxmonstersalive.value;
+    const maxmonstersalive = ServerGameAPI._cvars.maxmonstersalive;
+    return maxmonstersalive?.value ?? 0;
   }
 
   get debug_spawnpoints() {
-    return ServerGameAPI._cvars.debug_spawnpoints.value;
+    const debugSpawnPoints = ServerGameAPI._cvars.debug_spawnpoints;
+    return debugSpawnPoints?.value ?? 0;
   }
 
   _precacheResources() {
@@ -93,7 +124,7 @@ export class ServerGameAPI extends id1ServerGameAPI {
         entityClass.classname.startsWith('item_') ||
         entityClass.classname.startsWith('weapon_')
       ) {
-        new entityClass(null, this); // forces a precache
+        new entityClass(null, this).precacheEntity(); // forces a precache
       }
     }
 
@@ -107,22 +138,25 @@ export class ServerGameAPI extends id1ServerGameAPI {
     this.manager.startFrame();
   }
 
+  /** @param {ServerEdict} clientEdict */
   ClientConnect(clientEdict) {
-    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
+    const playerEntity = expectHellwavePlayer(clientEdict);
     playerEntity.connected();
 
     this.manager.clientConnected(playerEntity);
   }
 
+  /** @param {ServerEdict} clientEdict */
   ClientDisconnect(clientEdict) {
-    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
+    const playerEntity = expectHellwavePlayer(clientEdict);
     playerEntity.disconnected();
 
     this.manager.clientDisconnected(playerEntity);
   }
 
+  /** @param {ServerEdict} clientEdict */
   ClientBegin(clientEdict) {
-    const playerEntity = /** @type {HellwavePlayer} */(clientEdict.entity);
+    const playerEntity = expectHellwavePlayer(clientEdict);
 
     this.manager.clientBeing(playerEntity);
   }
@@ -134,12 +168,16 @@ export class ServerGameAPI extends id1ServerGameAPI {
     Object.assign(this._cvars, id1ServerGameAPI._cvars);
 
     this._cvars.rounds = ServerEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
-    this._cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    this._cvars.quiettime = ServerEngineAPI.RegisterCvar('hw_quiet_time', '15', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
     this._cvars.normaltime = ServerEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     this._cvars.maxmonstersalive = ServerEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
     this._cvars.debug_spawnpoints = ServerEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', cvarFlags.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');
   }
 
+  /**
+   * @param {string} mapname
+   * @param {number} serverflags
+   */
   init(mapname, serverflags) {
     super.init(mapname, serverflags);
 
@@ -147,7 +185,7 @@ export class ServerGameAPI extends id1ServerGameAPI {
     this.manager.subscribeToEvents();
 
     // set the round limit
-    this.manager.round_number_limit = Math.max(1, Math.min(12, ServerGameAPI._cvars.rounds.value));
+    this.manager.round_number_limit = Math.max(1, Math.min(12, this.rounds));
 
     // configure pmove
     // this.engine.SetPmoveConfiguration(pmoveConfig);
@@ -162,22 +200,34 @@ export class ServerGameAPI extends id1ServerGameAPI {
 
   static GetStartServerList() {
     return [
-      { label: 'Castle of the Damned', callback: (engineAPI) => engineAPI.AppendConsoleText(`
+      {
+        label: 'Castle of the Damned',
+        /** @param {ConsoleTextAppender} engineAPI */
+        callback(engineAPI) {
+          engineAPI.AppendConsoleText(`
           hostname "Hellwave: Castle of the Damned"
           deathmatch 0
           coop 1
           samelevel 1
           maxplayers 4
           map hw_e1m2
-        `) },
-      { label: 'Doomed Computer Station', callback: (engineAPI) => engineAPI.AppendConsoleText(`
+        `);
+        },
+      },
+      {
+        label: 'Doomed Computer Station',
+        /** @param {ConsoleTextAppender} engineAPI */
+        callback(engineAPI) {
+          engineAPI.AppendConsoleText(`
           hostname "Hellwave: Doomed Computer Station"
           deathmatch 0
           coop 1
           samelevel 1
           maxplayers 4
           map hw_doom
-        `) },
+        `);
+        },
+      },
     ];
   }
 };

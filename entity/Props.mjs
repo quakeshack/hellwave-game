@@ -1,4 +1,4 @@
-import { BaseWallEntity } from '../../id1/entity/Misc.mjs';
+import { BaseWallEntity } from '../../id1/entity/Misc.ts';
 import { moveType, solid } from '../Defs.mjs';
 
 /**
@@ -8,6 +8,9 @@ import { moveType, solid } from '../Defs.mjs';
  */
 export class WallEntity extends BaseWallEntity {
   static classname = 'func_wall';
+
+  /** @type {string | null} */
+  _shownModel = null;
 
   _declareFields() {
     super._declareFields();
@@ -27,7 +30,7 @@ export class WallEntity extends BaseWallEntity {
     this.solid = solid.SOLID_BSP;
     this.movetype = moveType.MOVETYPE_PUSH;
 
-    this.setModel(this._shownModel);
+    this.setModel(this._shownModel ?? null);
   }
 
   hide() {

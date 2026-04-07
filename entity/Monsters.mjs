@@ -1,4 +1,4 @@
-import DogMonsterEntity from '../../id1/entity/monster/Dog.mjs';
+import DogMonsterEntity from '../../id1/entity/monster/Dog.ts';
 import { hull } from '../Defs.mjs';
 
 export class HellwaveDogMonsterEntity extends DogMonsterEntity {

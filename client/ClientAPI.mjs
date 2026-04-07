@@ -1,7 +1,7 @@
 
-import sampleBSpline from '../../../shared/BSpline.mjs';
+import sampleBSpline from '../../../shared/BSpline.ts';
 
-import { ClientGameAPI as id1ClientGameAPI } from '../../id1/main.mjs';
+import { ClientGameAPI as id1ClientGameAPI } from '../../id1/main.ts';
 import { clientEvent, clientEventName } from '../Defs.mjs';
 import { ServerGameAPI } from '../GameAPI.mjs';
 
@@ -19,7 +19,7 @@ import HellwaveHUD from './HUD.mjs';
 
 class StartGameHandler {
   constructor(engineAPI) {
-    /** @type {import('source/shared/GameInterfaces').ClientEngineAPI} */
+    /** @type {import('../../../shared/GameInterfaces').ClientEngineAPI} */
     this.engine = engineAPI;
   }
 
@@ -71,12 +71,12 @@ export class ClientGameAPI extends id1ClientGameAPI {
 
   sfx = {
     phase: {
-      quiet: /** @type {import('source/shared/GameInterfaces').SFX[]} */ ([]),
-      normal: /** @type {import('source/shared/GameInterfaces').SFX[]} */ ([]),
+      quiet: /** @type {import('../../../shared/GameInterfaces').SFX[]} */ ([]),
+      normal: /** @type {import('../../../shared/GameInterfaces').SFX[]} */ ([]),
     },
   };
 
-  static loadingScreen = /** @type {import('source/shared/GameInterfaces').GLTexture} */(null);
+  static loadingScreen = /** @type {import('../../../shared/GameInterfaces').GLTexture} */(null);
 
   _newHUD() {
     return new HellwaveHUD(this, this.engine);
@@ -111,7 +111,7 @@ export class ClientGameAPI extends id1ClientGameAPI {
   static Init(engineAPI) {
     super.Init(engineAPI);
 
-    engineAPI.LoadPicFromFile('gfx/loadingscreen.png').then((/** @type {import('source/shared/GameInterfaces').GLTexture} */ tex) => {
+    engineAPI.LoadPicFromFile('gfx/loadingscreen.png').then((/** @type {import('../../../shared/GameInterfaces').GLTexture} */ tex) => {
       tex.lockTextureMode('GL_LINEAR');
       this.loadingScreen = tex;
     }).catch(() => {

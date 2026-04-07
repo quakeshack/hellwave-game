@@ -1,4 +1,4 @@
-import { ClientStats } from '../../../game/id1/client/Sync.mjs';
+import { ClientStats } from '../../../game/id1/client/Sync.ts';
 import { phases } from '../GameManager.mjs';
 
 // NOTE: keep in sync with server HellwaveStats

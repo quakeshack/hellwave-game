@@ -1,11 +1,11 @@
-import Vector from '../../../shared/Vector.mjs';
+import Vector from '../../../shared/Vector.ts';
 import { moveType, solid } from '../Defs.mjs';
 import HellwavePlayer from './Player.mjs';
 import { WallEntity } from './Props.mjs';
 import { phases } from '../GameManager.mjs';
-import { BaseTriggerEntity } from '../../id1/entity/Triggers.mjs';
-import BaseEntity from '../../id1/entity/BaseEntity.mjs';
-import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.mjs';
+import { BaseTriggerEntity } from '../../id1/entity/Triggers.ts';
+import BaseEntity from '../../id1/entity/BaseEntity.ts';
+import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.ts';
 import { ServerGameAPI } from '../GameAPI.mjs';
 
 /**

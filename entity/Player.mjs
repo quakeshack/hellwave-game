@@ -1,14 +1,33 @@
-import Vector from '../../../shared/Vector.mjs';
+import Vector from '../../../shared/Vector.ts';
 import { channel, clientEvent, flags, formatMoney, items, moveType, solid } from '../Defs.mjs';
 import { phases } from '../GameManager.mjs';
 import { ServerGameAPI } from '../GameAPI.mjs';
-import { BaseItemEntity, HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
-import { PlayerEntity } from '../../id1/entity/Player.mjs';
-import { Backpack } from '../../id1/entity/Weapons.mjs';
+import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.ts';
+import { PlayerEntity } from '../../id1/entity/Player.ts';
+import { Backpack } from '../../id1/entity/Weapons.ts';
 import { HellwaveBackpackEntity } from './Items.mjs';
 
 /** @typedef {import('../../../shared/GameInterfaces').ServerEdict} ServerEdict */
 /** @typedef {import('../../../shared/GameInterfaces').ServerEngineAPI} ServerEngineAPI */
+/** @typedef {import('../../id1/entity/Weapons.ts').BackpackPickup} BackpackPickup */
+/** @typedef {1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9} BuyMenuItemId */
+/** @typedef {{ ammo_shells: number, ammo_nails: number, ammo_rockets: number, ammo_cells: number, items: number, weapon: number, owner?: { equals: function(HellwavePlayer): boolean } | null }} OwnedBackpackPickup */
+/** @typedef {{ items?: number, ammo_shells?: number, ammo_nails?: number, ammo_rockets?: number, ammo_cells?: number }} BuyMenuBackpack */
+/** @typedef {{ classname: string }} BuyMenuEntityClass */
+/** @typedef {{ cost: number, label: string, available?: (playerEntity: HellwavePlayer) => boolean, entityClass?: BuyMenuEntityClass, backpack?: BuyMenuBackpack, spawnflags?: number }} BuyMenuItem */
+
+/**
+ * Narrow a spawned entity to a hellwave backpack.
+ * @param {object | null} entity
+ * @returns {HellwaveBackpackEntity} Spawned backpack entity.
+ */
+function expectHellwaveBackpack(entity) {
+  if (!(entity instanceof HellwaveBackpackEntity)) {
+    throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+  }
+
+  return entity;
+}
 
 export const buyMenuItems = {
   // heavy armor
@@ -43,11 +62,27 @@ export const buyMenuItems = {
   9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
 };
 
+/** @type {Record<BuyMenuItemId, BuyMenuItem>} */
+const typedBuyMenuItems = buyMenuItems;
+
 export class HellwaveBackpack extends Backpack {
+  /** @type {number} */
   money = 0;
 };
 
 export default class HellwavePlayer extends PlayerEntity {
+  /** @type {number} */
+  money = 0;
+
+  /** @type {-1|0|1|2} */
+  buyzone = 0;
+
+  /** @type {number} */
+  buyzone_time = 0;
+
+  /** @type {boolean} */
+  spectating = false;
+
   /**
    * @param {ServerEdict} edict linked edict
    * @param {ServerGameAPI} gameAPI server game API
@@ -153,7 +188,7 @@ export default class HellwavePlayer extends PlayerEntity {
   _dropBackpack() {
     const moneyToDrop = Math.min(1000, this.money); // money capped to 1000 per backpack
 
-    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
+    const spawnedBackpack = this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
       origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)),
       items: this.items & (items.IT_LIGHTNING | items.IT_SUPER_NAILGUN | items.IT_NAILGUN | items.IT_ROCKET_LAUNCHER | items.IT_GRENADE_LAUNCHER | items.IT_SUPER_SHOTGUN | items.IT_SHOTGUN),
       ammo_cells: this.ammo_cells,
@@ -163,7 +198,13 @@ export default class HellwavePlayer extends PlayerEntity {
       money: moneyToDrop,
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
-    }).entity);
+    });
+
+    if (spawnedBackpack === null) {
+      throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+    }
+
+    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
 
     this.ammo_cells = 0;
     this.ammo_nails = 0;
@@ -194,19 +235,29 @@ export default class HellwavePlayer extends PlayerEntity {
       origin.add(trace.plane.normal.copy().multiply(4.0));
     }
 
-    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
+    const spawnedBackpack = this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
       origin,
       angles: this.angles.copy(),
       money: 100,
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
       pain_finished: this.game.time + 0.5, // make it untouchable for a split second
-    }).entity);
+    });
+
+    if (spawnedBackpack === null) {
+      throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+    }
+
+    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
 
     this.updateMoney(-backpack.money);
   }
 
-  applyBackpack(/** @type {BaseItemEntity | HellwaveBackpackEntity} */ backpack) {
+  /**
+   * @param {OwnedBackpackPickup} backpack
+   * @returns {boolean} True when the pickup changed player state.
+   */
+  applyBackpack(backpack) {
     let backpackUsed = super.applyBackpack(backpack);
 
     if (backpack.owner && !backpack.owner.equals(this)) {
@@ -278,7 +329,7 @@ export default class HellwavePlayer extends PlayerEntity {
     }
 
     if (this.buyzone === 2 && this.impulse > 0 && this.impulse <= 9) {
-      this._buyMenuPurchase(this.impulse);
+      this._buyMenuPurchase(/** @type {BuyMenuItemId} */ (this.impulse));
       this.impulse = 0;
     }
 
@@ -312,10 +363,11 @@ export default class HellwavePlayer extends PlayerEntity {
     }
   }
 
+  /** @param {BuyMenuItemId} item */
   _buyMenuPurchase(item) {
     // TODO: send events to client instead
 
-    const menuItem = buyMenuItems[item];
+    const menuItem = typedBuyMenuItems[item];
 
     if (!menuItem) {
       this.consolePrint('invalid buy menu item ' + item + '!\n');
