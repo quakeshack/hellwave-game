@@ -126,7 +126,8 @@ export class BuyZoneEntity extends BaseTriggerEntity {
     }
 
     for (let i = 1; i <= this.engine.maxplayers + 1; i++) {
-      const playerEntity = this.engine.GetEdictById(i).entity;
+      const playerEdict = this.engine.GetEdictById(i);
+      const playerEntity = playerEdict?.entity ?? null;
 
       if (!(playerEntity instanceof PlayerEntity)) {
         continue;

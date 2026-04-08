@@ -1,9 +1,9 @@
-import type { ClientEngineAPI, GLTexture, SFX } from '../../../shared/GameInterfaces.ts';
+import type { ClientEngineAPI, GLTexture, SFX, StartGameInterface } from '../../../shared/GameInterfaces.ts';
 
 import sampleBSpline from '../../../shared/BSpline.ts';
 import type Vector from '../../../shared/Vector.ts';
 
-import { ClientGameAPI as Id1ClientGameAPI, type ClientStartGameInterface, type Id1Clientdata } from '../../id1/client/ClientAPI.ts';
+import { ClientGameAPI as Id1ClientGameAPI, type Id1Clientdata } from '../../id1/client/ClientAPI.ts';
 import { clientEvent, clientEventName } from '../Defs.ts';
 import { ServerGameAPI } from '../GameAPI.ts';
 
@@ -24,7 +24,7 @@ interface HellwaveClientSfx {
   phase: HellwavePhaseSfx;
 }
 
-class StartGameHandler implements ClientStartGameInterface {
+class StartGameHandler implements StartGameInterface {
   readonly engine: ClientEngineAPI;
 
   constructor(engineAPI: ClientEngineAPI) {

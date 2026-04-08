@@ -155,7 +155,8 @@ function canSpawnChoice(engine: ServerEngineAPI, choice: MonsterSpawnChoice): bo
  * @returns Spawn choices for the current or last configured round.
  */
 function getMonsterChoicesForRound(roundNumber: number): readonly MonsterSpawnChoice[] {
-  return gameRoundMonsterMatrix[Math.min(roundNumber, highestConfiguredRound)] ?? [];
+  const roundKey = Math.min(roundNumber, highestConfiguredRound) as keyof typeof gameRoundMonsterMatrix;
+  return gameRoundMonsterMatrix[roundKey] ?? [];
 }
 
 /**
@@ -274,14 +275,19 @@ export default class GameManager {
    * Spawn a pickup entity and toss it into the world.
    */
   dropItem(entityClassname: string, origin: Vector, params: EdictData = {}): void {
-    const item = this.engine.SpawnEntity(entityClassname, {
+    const spawnedItem = this.engine.SpawnEntity(entityClassname, {
       origin: origin.copy(),
       regeneration_time: 0,
       remove_after: 120,
       ...params,
-    }).entity as BaseItemEntity;
+    });
 
+    const item = spawnedItem?.entity;
     console.assert(item instanceof BaseItemEntity, 'dropped item is not a BaseItemEntity');
+    if (!(item instanceof BaseItemEntity)) {
+      return;
+    }
+
     item.toss();
   }
 
@@ -366,13 +372,22 @@ export default class GameManager {
 
     this.spawn_next = this.game.time + (this.phase === phases.action ? 0.5 : 3.0);
 
-    const goalentity = Array.from(this.engine.GetClients())
-      .map((edict) => edict.entity)
-      .filter((entity): entity is HellwavePlayer => entity instanceof HellwavePlayer
-        && !entity.spectating
-        && entity.health > 0
-        && entity.origin.distanceTo(origin) <= 4096.0)
-      .sort((left, right) => left.origin.distanceTo(origin) - right.origin.distanceTo(origin))[0] ?? null;
+    const alivePlayers: HellwavePlayer[] = [];
+
+    for (const clientEdict of this.engine.GetClients()) {
+      const player = clientEdict.entity;
+
+      if (!(player instanceof HellwavePlayer) || player.spectating || player.health <= 0) {
+        continue;
+      }
+
+      if (player.origin.distanceTo(origin) <= 4096.0) {
+        alivePlayers.push(player);
+      }
+    }
+
+    alivePlayers.sort((left, right) => left.origin.distanceTo(origin) - right.origin.distanceTo(origin));
+    const goalentity = alivePlayers[0] ?? null;
 
     const monsterChoices = getMonsterChoicesForRound(this.round_number);
 
@@ -417,11 +432,17 @@ export default class GameManager {
       angles.set(direction.toAngles());
     }
 
-    const enemy = this.engine.SpawnEntity(selectedChoice.classname, {
+    const spawnedEnemy = this.engine.SpawnEntity(selectedChoice.classname, {
       origin,
       enemy: goalentity?.edict ?? null,
       angles,
-    }).entity as BaseMonster;
+    });
+
+    const enemy = spawnedEnemy?.entity;
+    console.assert(enemy instanceof BaseMonster, 'spawnEnemies expects a BaseMonster entity');
+    if (!(enemy instanceof BaseMonster)) {
+      return;
+    }
 
     this.engine.SpawnEntity(TeleportEffectEntity.classname, { origin });
 
@@ -636,7 +657,10 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
 
-    this.engine.PlayTrack(this.game.worldspawn.sounds);
+    const worldspawn = this.game.worldspawn!;
+    console.assert(worldspawn !== null, 'Hellwave normal phase requires a worldspawn');
+
+    this.engine.PlayTrack(worldspawn.sounds);
   }
 
   startActionPhase(): void {
@@ -740,6 +764,8 @@ export default class GameManager {
   }
 
   resetGame(): void {
-    this.engine.ChangeLevel(this.game.mapname);
+    const mapname = this.game.mapname!;
+    console.assert(mapname !== null, 'resetGame requires an active map name');
+    this.engine.ChangeLevel(mapname);
   }
 }
