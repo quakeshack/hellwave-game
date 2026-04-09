@@ -1,39 +1,36 @@
-import { BaseWallEntity } from '../../id1/entity/Misc.mjs';
-import { moveType, solid } from '../Defs.mjs';
+import { BaseWallEntity } from '../../id1/entity/Misc.ts';
+import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+
+import { moveType, solid } from '../Defs.ts';
 
 /**
  * QUAKED func_wall (0 .5 .8) ?
- * This is just a solid wall if not inhibitted
+ * This is just a solid wall if not inhibitted.
  * Brings additional show/hide functionality.
  */
+@entity
 export class WallEntity extends BaseWallEntity {
   static classname = 'func_wall';
 
-  _declareFields() {
-    super._declareFields();
+  @serializable _shownModel: string | null = null;
 
-    this._serializer.startFields();
-    this._shownModel = null;
-    this._serializer.endFields();
-  }
-
-  spawn() {
+  override spawn(): void {
     this._shownModel = this.model;
 
     this.show();
   }
 
-  show() {
+  show(): void {
     this.solid = solid.SOLID_BSP;
     this.movetype = moveType.MOVETYPE_PUSH;
 
     this.setModel(this._shownModel);
   }
 
-  hide() {
+  hide(): void {
     this.solid = solid.SOLID_NOT;
     this.movetype = moveType.MOVETYPE_NONE;
 
     this.unsetModel();
   }
-};
+}

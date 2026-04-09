@@ -1,33 +1,89 @@
-import Vector from '../../../shared/Vector.mjs';
-import { channel, clientEvent, flags, formatMoney, items, moveType, solid } from '../Defs.mjs';
-import { phases } from '../GameManager.mjs';
-import { ServerGameAPI } from '../GameAPI.mjs';
-import { BaseItemEntity, HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.mjs';
-import { PlayerEntity } from '../../id1/entity/Player.mjs';
-import { Backpack } from '../../id1/entity/Weapons.mjs';
-import { HellwaveBackpackEntity } from './Items.mjs';
+import type { SerializableEntity } from '../../../shared/GameInterfaces.ts';
+import type { ServerGameAPI } from '../GameAPI.ts';
 
-/** @typedef {import('../../../shared/GameInterfaces').ServerEdict} ServerEdict */
-/** @typedef {import('../../../shared/GameInterfaces').ServerEngineAPI} ServerEngineAPI */
+import Vector from '../../../shared/Vector.ts';
 
-export const buyMenuItems = {
+import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.ts';
+import { PlayerEntity } from '../../id1/entity/Player.ts';
+import { Backpack, type BackpackPickup } from '../../id1/entity/Weapons.ts';
+
+import { channel, clientEvent, flags, formatMoney, items, moveType, solid } from '../Defs.ts';
+import { phases } from '../Phases.ts';
+
+import { HellwaveBackpackEntity } from './Items.ts';
+
+type BuyMenuItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+interface OwnedBackpackPickup extends BackpackPickup {
+  readonly owner?: HellwaveBackpackOwner | null;
+}
+
+interface HellwaveBackpackOwner {
+  equals(playerEntity: HellwavePlayer): boolean;
+}
+
+interface BuyMenuBackpack {
+  readonly items?: number;
+  readonly ammo_shells?: number;
+  readonly ammo_nails?: number;
+  readonly ammo_rockets?: number;
+  readonly ammo_cells?: number;
+}
+
+interface BuyMenuEntityClass {
+  readonly classname: string;
+}
+
+interface BuyMenuItem {
+  readonly cost: number;
+  readonly label: string;
+  readonly available?: (playerEntity: HellwavePlayer) => boolean;
+  readonly entityClass?: BuyMenuEntityClass;
+  readonly backpack?: BuyMenuBackpack;
+  readonly spawnflags?: number;
+}
+
+/**
+ * Narrow a spawned entity to a Hellwave backpack.
+ * @returns Spawned backpack entity.
+ */
+function expectHellwaveBackpack(entity: SerializableEntity | null): HellwaveBackpackEntity {
+  if (!(entity instanceof HellwaveBackpackEntity)) {
+    throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+  }
+
+  return entity;
+}
+
+export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
   // heavy armor
-  1: { cost: 100, label: 'Heavy Armor', entityClass: HeavyArmorEntity,
-    available(/** @type {HellwavePlayer} */ playerEntity) {
+  1: {
+    cost: 100,
+    label: 'Heavy Armor',
+    entityClass: HeavyArmorEntity,
+    available(playerEntity: HellwavePlayer): boolean {
       return playerEntity.armorvalue < 200;
     },
   },
 
   // shotgun or 20 shells
-  2: { cost: 200, label: 'Shotgun / 20 shells', backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 },
-    available(/** @type {HellwavePlayer} */ playerEntity) {
+  2: {
+    cost: 200,
+    label: 'Shotgun / 20 shells',
+    backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 },
+    available(playerEntity: HellwavePlayer): boolean {
       return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
 
   // super shotgun or 50 shells
-  3: { cost: 1000, label: 'Super Shotgun', entityClass: WeaponSuperShotgun, backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 },
-    available(/** @type {HellwavePlayer} */ playerEntity) {
+  3: {
+    cost: 1000,
+    label: 'Super Shotgun',
+    entityClass: WeaponSuperShotgun,
+    backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 },
+    available(playerEntity: HellwavePlayer): boolean {
       return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
@@ -43,41 +99,44 @@ export const buyMenuItems = {
   9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
 };
 
+@entity
 export class HellwaveBackpack extends Backpack {
-  money = 0;
-};
+  @serializable money = 0;
+}
 
+@entity
 export default class HellwavePlayer extends PlayerEntity {
-  /**
-   * @param {ServerEdict} edict linked edict
-   * @param {ServerGameAPI} gameAPI server game API
-   */
-  constructor(edict, gameAPI) {
-    super(edict, gameAPI);
-  }
+  @serializable money = 0;
 
-  static clientEntityFields = [
+  /** -1: not allowed, 0: outside, 1: inside zone, 2: inside menu. */
+  @serializable buyzone: -1 | 0 | 1 | 2 = 0;
+
+  @serializable buyzone_time = 0;
+  @serializable spectating = false;
+
+  static override clientEntityFields = [
     ...PlayerEntity.clientEntityFields,
     'money',
     'health',
     'spectating',
   ];
 
-  static clientdataFields = [
+  static override clientdataFields = [
     ...PlayerEntity.clientdataFields,
     'buyzone',
     'spectating',
   ];
 
-  static _backpackLimits = Object.assign({}, PlayerEntity._backpackLimits, {
+  static override _backpackLimits = {
+    ...PlayerEntity._backpackLimits,
     ammo_shells: 500,
     ammo_nails: 500,
     ammo_rockets: 200,
     ammo_cells: 600,
-  });
+  };
 
-  _respawn() {
-    switch (/** @type {ServerGameAPI} */(this.game).manager.phase) {
+  protected override _respawn(): void {
+    switch ((this.game as ServerGameAPI).manager.phase) {
       case phases.quiet:
         super._respawn();
         break;
@@ -93,25 +152,12 @@ export default class HellwavePlayer extends PlayerEntity {
     }
   }
 
-  _applySpawnParameters() {
+  protected override _applySpawnParameters(): void {
     // always make sure players start from zero
     this._freshSpawnParameters();
   }
 
-  _declareFields() {
-    super._declareFields();
-
-    this._serializer.startFields();
-    this.money = 0;
-    /** @type {-1|0|1|2} -1 – not allowed, 0 – outside the zone, 1 – inside the zone, 2 – inside the buy menu */
-    this.buyzone = 0;
-    this.buyzone_time = 0;
-    this.spectating = false;
-    this._serializer.endFields();
-  }
-
-  /** @protected */
-  _freshSpawnParameters() {
+  protected override _freshSpawnParameters(): void {
     this.items = items.IT_AXE;
     this.health = 100;
     this.armorvalue = 0;
@@ -124,8 +170,7 @@ export default class HellwavePlayer extends PlayerEntity {
     this.money = 1000;
   }
 
-  /** @protected */
-  _spectate() {
+  protected _spectate(): void {
     const origin = this.origin.copy();
     const angles = this.angles.copy();
     this.clear();
@@ -141,7 +186,7 @@ export default class HellwavePlayer extends PlayerEntity {
     this.spectating = true;
   }
 
-  _unspectate() {
+  protected _unspectate(): void {
     this.flags &= ~(flags.FL_FLY | flags.FL_NOTARGET);
 
     this.clear();
@@ -149,11 +194,10 @@ export default class HellwavePlayer extends PlayerEntity {
     this.spectating = false;
   }
 
-  /** @protected */
-  _dropBackpack() {
+  protected override _dropBackpack(): void {
     const moneyToDrop = Math.min(1000, this.money); // money capped to 1000 per backpack
 
-    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
+    const spawnedBackpack = this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
       origin: this.origin.copy().subtract(new Vector(0.0, 0.0, 24.0)),
       items: this.items & (items.IT_LIGHTNING | items.IT_SUPER_NAILGUN | items.IT_NAILGUN | items.IT_ROCKET_LAUNCHER | items.IT_GRENADE_LAUNCHER | items.IT_SUPER_SHOTGUN | items.IT_SHOTGUN),
       ammo_cells: this.ammo_cells,
@@ -163,7 +207,13 @@ export default class HellwavePlayer extends PlayerEntity {
       money: moneyToDrop,
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
-    }).entity);
+    });
+
+    if (spawnedBackpack === null) {
+      throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+    }
+
+    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
 
     this.ammo_cells = 0;
     this.ammo_nails = 0;
@@ -177,8 +227,7 @@ export default class HellwavePlayer extends PlayerEntity {
     backpack.toss();
   }
 
-  /** @protected */
-  _dropMoney() {
+  protected _dropMoney(): void {
     if (this.money < 100) {
       return; // not enough money to drop
     }
@@ -194,22 +243,29 @@ export default class HellwavePlayer extends PlayerEntity {
       origin.add(trace.plane.normal.copy().multiply(4.0));
     }
 
-    const backpack = /** @type {HellwaveBackpackEntity} */ (this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
+    const spawnedBackpack = this.engine.SpawnEntity(HellwaveBackpackEntity.classname, {
       origin,
       angles: this.angles.copy(),
       money: 100,
       regeneration_time: 0, // do not regenerate
       remove_after: 120, // remove after 120s
       pain_finished: this.game.time + 0.5, // make it untouchable for a split second
-    }).entity);
+    });
+
+    if (spawnedBackpack === null) {
+      throw new TypeError('Expected HellwaveBackpackEntity spawn result');
+    }
+
+    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
 
     this.updateMoney(-backpack.money);
   }
 
-  applyBackpack(/** @type {BaseItemEntity | HellwaveBackpackEntity} */ backpack) {
+  override applyBackpack(backpack: BackpackPickup): boolean {
     let backpackUsed = super.applyBackpack(backpack);
+    const ownedBackpack = backpack as OwnedBackpackPickup;
 
-    if (backpack.owner && !backpack.owner.equals(this)) {
+    if (ownedBackpack.owner && !ownedBackpack.owner.equals(this)) {
       // backpack already owned by this player (bought from the buyzone)
       return false;
     }
@@ -222,13 +278,13 @@ export default class HellwavePlayer extends PlayerEntity {
     return backpackUsed;
   }
 
-  connected() {
+  override connected(): void {
     super.connected();
 
     this.money = 1000;
   }
 
-  disconnected() {
+  override disconnected(): void {
     if (!this.spectating) {
       super.disconnected();
       return;
@@ -237,8 +293,8 @@ export default class HellwavePlayer extends PlayerEntity {
     this.engine.BroadcastPrint(`${this.netname} left the game.\n`);
   }
 
-  putPlayerInServer() {
-    const manager = /** @type {ServerGameAPI} */(this.game).manager;
+  override putPlayerInServer(): void {
+    const manager = (this.game as ServerGameAPI).manager;
 
     // update client on stats
     this.game.stats.sendToPlayer(this);
@@ -257,7 +313,7 @@ export default class HellwavePlayer extends PlayerEntity {
     this.setOrigin(this.origin);
   }
 
-  _handleImpulseCommands() {
+  protected override _handleImpulseCommands(): void {
     switch (this.impulse) {
       case 20:
         this._dropMoney();
@@ -278,14 +334,14 @@ export default class HellwavePlayer extends PlayerEntity {
     }
 
     if (this.buyzone === 2 && this.impulse > 0 && this.impulse <= 9) {
-      this._buyMenuPurchase(this.impulse);
+      this._buyMenuPurchase(this.impulse as BuyMenuItemId);
       this.impulse = 0;
     }
 
     super._handleImpulseCommands();
   }
 
-  _weaponFrame() {
+  protected override _weaponFrame(): void {
     if (this.spectating) {
       return; // no weapon handling while spectating
     }
@@ -293,7 +349,7 @@ export default class HellwavePlayer extends PlayerEntity {
     super._weaponFrame();
   }
 
-  _buyMenuRequested() {
+  protected _buyMenuRequested(): void {
     switch (this.buyzone) {
       case -1:
         return;
@@ -312,23 +368,23 @@ export default class HellwavePlayer extends PlayerEntity {
     }
   }
 
-  _buyMenuPurchase(item) {
+  protected _buyMenuPurchase(item: BuyMenuItemId): void {
     // TODO: send events to client instead
 
     const menuItem = buyMenuItems[item];
 
     if (!menuItem) {
-      this.consolePrint('invalid buy menu item ' + item + '!\n');
+      this.consolePrint(`invalid buy menu item ${item}!\n`);
       return;
     }
 
     if (menuItem.available && !menuItem.available(this)) {
-      this.centerPrint('you already have ' + menuItem.label);
+      this.centerPrint(`you already have ${menuItem.label}`);
       return;
     }
 
     if (this.money < menuItem.cost) {
-      this.centerPrint('you need ' + formatMoney(menuItem.cost) + ' to buy that!');
+      this.centerPrint(`you need ${formatMoney(menuItem.cost)} to buy that!`);
       return;
     }
 
@@ -341,7 +397,7 @@ export default class HellwavePlayer extends PlayerEntity {
         origin: this.origin.copy().add(this.view_ofs),
         angles: this.angles.copy(),
         owner: this, // make it only consumable by this player
-        spawnflags: menuItem.spawnflags || 0,
+        spawnflags: menuItem.spawnflags ?? 0,
       });
     }
 
@@ -353,15 +409,15 @@ export default class HellwavePlayer extends PlayerEntity {
     }
   }
 
-  updateMoney(difference = 0) {
+  updateMoney(difference = 0): void {
     this.money += difference;
     this.dispatchEvent(clientEvent.MONEY_UPDATE, this.money);
   }
 
-  playerPostThink() {
+  override playerPostThink(): void {
     super.playerPostThink();
 
-    if (/** @type {ServerGameAPI} */(this.game).manager.phase !== phases.quiet) {
+    if ((this.game as ServerGameAPI).manager.phase !== phases.quiet) {
       this.buyzone = -1;
       return;
     }
@@ -374,5 +430,4 @@ export default class HellwavePlayer extends PlayerEntity {
       this.buyzone = 1; // inside the zone
     }
   }
-};
-
+}
