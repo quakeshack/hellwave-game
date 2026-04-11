@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import Vector from '../../../shared/Vector.ts';
+import { createMockClientEngine, createMockSound } from '../../id1/test/client/fixtures.ts';
 
 await import('../../id1/GameAPI.ts');
 
@@ -12,212 +13,6 @@ const hudModule = await import('../client/HUD.ts');
 
 const { ClientGameAPI } = clientApiModule;
 const HellwaveHUD = hudModule.default;
-
-/**
- * Create an event bus with subscribe and publish support.
- * @returns {object} Mock event bus.
- */
-function createEventBus() {
-  const listeners = new Map();
-
-  return {
-    subscribe(eventName, handler) {
-      const handlers = listeners.get(eventName) ?? [];
-      handlers.push(handler);
-      listeners.set(eventName, handlers);
-
-      return () => {
-        const currentHandlers = listeners.get(eventName) ?? [];
-        listeners.set(eventName, currentHandlers.filter((currentHandler) => currentHandler !== handler));
-      };
-    },
-
-    publish(eventName, ...args) {
-      for (const handler of listeners.get(eventName) ?? []) {
-        handler(...args);
-      }
-    },
-  };
-}
-
-/**
- * Create a mock texture with the surface expected by the client HUD.
- * @param {string} name Debug name.
- * @param {number} width Texture width.
- * @param {number} height Texture height.
- * @returns {object} Mock texture.
- */
-function createMockTexture(name, width = 24, height = 24) {
-  return {
-    name,
-    width,
-    height,
-    freed: false,
-    lockedTextureMode: null,
-    free() {
-      this.freed = true;
-    },
-    lockTextureMode(mode) {
-      this.lockedTextureMode = mode;
-      return this;
-    },
-    wrapClamped() {
-      return this;
-    },
-  };
-}
-
-/**
- * Create a mock sound object.
- * @param {string} name Debug name.
- * @returns {object} Mock sound.
- */
-function createMockSound(name) {
-  return {
-    name,
-    playCount: 0,
-    play() {
-      this.playCount += 1;
-    },
-  };
-}
-
-/**
- * Create a minimal client engine API mock for Hellwave HUD and client API tests.
- * @param {object} overrides Override values.
- * @returns {object} Mock engine API.
- */
-function createMockClientEngine(overrides = {}) {
-  const eventBus = createEventBus();
-  const drawStrings = [];
-  const drawPics = [];
-  const rocketTrails = [];
-  const contentShifts = [];
-  const consoleCommands = new Map();
-  const sounds = [];
-  const cvarSets = [];
-
-  return {
-    eventBus,
-    drawStrings,
-    drawPics,
-    rocketTrails,
-    contentShifts,
-    sounds,
-    cvarSets,
-    consoleCommands,
-    DrawPic(...args) {
-      drawPics.push(args);
-    },
-    DrawRect() {
-    },
-    DrawString(...args) {
-      drawStrings.push(args);
-    },
-    LoadPicFromWad(name) {
-      return createMockTexture(name);
-    },
-    LoadPicFromLump(name) {
-      return createMockTexture(name, 64, 16);
-    },
-    LoadPicFromFile(name) {
-      return Promise.resolve(createMockTexture(name, 320, 200));
-    },
-    LoadSound(name) {
-      const sound = createMockSound(name);
-      sounds.push(sound);
-      return sound;
-    },
-    RegisterCommand(name, handler) {
-      consoleCommands.set(name, handler);
-    },
-    UnregisterCommand(name) {
-      consoleCommands.delete(name);
-    },
-    ConsoleDebug() {
-    },
-    ConsoleError() {
-    },
-    ConsolePrint() {
-    },
-    ConsoleWarning() {
-    },
-    ContentShift(...args) {
-      contentShifts.push(args);
-    },
-    IndexToRGB() {
-      return [1.0, 1.0, 1.0];
-    },
-    ModForName(name) {
-      return { name };
-    },
-    AllocDlight() {
-      return {};
-    },
-    WorldToScreen(origin) {
-      return new Vector(origin[0], origin[1], 0.0);
-    },
-    *GetVisibleEntities(filter = null) {
-      const visibleEntities = overrides.visibleEntities ?? [];
-
-      for (const entity of visibleEntities) {
-        if (filter === null || filter(entity)) {
-          yield entity;
-        }
-      }
-    },
-    RocketTrail(start, end, type) {
-      rocketTrails.push({ start, end, type });
-    },
-    AppendConsoleText() {
-    },
-    GetCvar(name) {
-      return {
-        set(value) {
-          cvarSets.push([name, value]);
-        },
-      };
-    },
-    VID: {
-      width: 320,
-      height: 200,
-    },
-    SCR: {
-      viewsize: 120,
-    },
-    CL: {
-      gametime: 0,
-      frametime: 0.1,
-      entityNum: 1,
-      intermission: false,
-      levelname: 'hw_e1m2',
-      maxclients: 2,
-      time: 0,
-      viewangles: new Vector(),
-      vieworigin: new Vector(),
-      score(index) {
-        if (index === 1) {
-          return {
-            isActive: true,
-            frags: 0,
-            name: 'Teammate',
-            ping: 20,
-            colors: 0,
-          };
-        }
-
-        return {
-          isActive: false,
-          frags: 0,
-          name: '',
-          ping: 0,
-          colors: 0,
-        };
-      },
-    },
-    ...overrides,
-  };
-}
 
 /**
  * Create a minimal Hellwave clientdata map for tests.
@@ -269,12 +64,27 @@ function createHellwaveGame(engine, overrides = {}) {
 }
 
 void describe('Hellwave HUD', () => {
+  void test('reuses the inherited hudStats getter for Hellwave-specific stats', () => {
+    const engine = createMockClientEngine();
+    const game = createHellwaveGame(engine);
+    const hud = new HellwaveHUD(game, engine);
+
+    hud.init();
+
+    engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'round_total', 6);
+    engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'phase', phases.quiet);
+
+    assert.equal(hud.hudStats.round_total, 6);
+    assert.equal(hud.hudStats.phase, phases.quiet);
+  });
+
   void test('plays phase sounds, updates money, and shows the spectator status message', () => {
     const originalRandom = Math.random;
+    const engine = createMockClientEngine();
     Math.random = () => 0.0;
 
     try {
-      const engine = createMockClientEngine();
+      HellwaveHUD.Init(engine);
       const game = createHellwaveGame(engine, {
         clientdata: createClientdata({ spectating: true }),
       });
@@ -290,8 +100,9 @@ void describe('Hellwave HUD', () => {
       assert.equal(game.sfx.phase.normal[0].playCount, 1);
       assert.deepEqual(hud.inventory.money, [250, null, 0]);
       assert.deepEqual(engine.contentShifts.length, 1);
-      assert.ok(engine.drawStrings.some(([, , text]) => text === 'Spectating... Waiting for next round'));
+      assert.ok(engine.drawStrings.some(({ text }) => text === 'Spectating... Waiting for next round'));
     } finally {
+      HellwaveHUD.Shutdown(engine);
       Math.random = originalRandom;
     }
   });

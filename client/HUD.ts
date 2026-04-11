@@ -57,6 +57,10 @@ export default class HellwaveHUD extends Q1HUD {
     return new HellwaveMessageBag(this.engine, this.sbar);
   }
 
+  override get hudStats(): HellwaveStatsInfo {
+    return super.hudStats as HellwaveStatsInfo;
+  }
+
   protected override _subscribeToEvents(): void {
     super._subscribeToEvents();
 
@@ -105,16 +109,6 @@ export default class HellwaveHUD extends Q1HUD {
     this.#drawRoundStats();
     this.#drawBuyMenu();
     this.#drawPlayerNames();
-  }
-
-  #requireStats(): HellwaveStatsInfo {
-    console.assert(this.stats !== null, 'HellwaveStatsInfo must exist before drawing the Hellwave HUD');
-
-    if (this.stats === null) {
-      throw new TypeError('HellwaveStatsInfo must exist before drawing the Hellwave HUD');
-    }
-
-    return this.stats;
   }
 
   #drawPlayerNames(): void {
@@ -200,7 +194,7 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawAccountBalance(): void {
-    const stats = this.#requireStats();
+    const stats = this.hudStats;
 
     if (stats.phase !== phases.quiet || this.inventory.money[0] === null) {
       return;
@@ -221,7 +215,7 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawRoundStats(): void {
-    const stats = this.#requireStats();
+    const stats = this.hudStats;
 
     if (stats.phase === phases.quiet) {
       const roundString = `${stats.round_current} / ${stats.round_total}`;
