@@ -64,7 +64,7 @@ function createHellwaveGame(engine, overrides = {}) {
 }
 
 void describe('Hellwave HUD', () => {
-  void test('reuses the inherited hudStats getter for Hellwave-specific stats', () => {
+  void test('reuses the inherited stats getter for Hellwave-specific stats', () => {
     const engine = createMockClientEngine();
     const game = createHellwaveGame(engine);
     const hud = new HellwaveHUD(game, engine);
@@ -74,8 +74,8 @@ void describe('Hellwave HUD', () => {
     engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'round_total', 6);
     engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'phase', phases.quiet);
 
-    assert.equal(hud.hudStats.round_total, 6);
-    assert.equal(hud.hudStats.phase, phases.quiet);
+    assert.equal(hud.stats.round_total, 6);
+    assert.equal(hud.stats.phase, phases.quiet);
   });
 
   void test('plays phase sounds, updates money, and shows the spectator status message', () => {

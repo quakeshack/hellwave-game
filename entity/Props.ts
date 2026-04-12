@@ -1,5 +1,5 @@
 import { BaseWallEntity } from '../../id1/entity/Misc.ts';
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
 import { moveType, solid } from '../Defs.ts';
 
@@ -8,7 +8,7 @@ import { moveType, solid } from '../Defs.ts';
  * This is just a solid wall if not inhibitted.
  * Brings additional show/hide functionality.
  */
-@entity
+@serializableObject
 export class WallEntity extends BaseWallEntity {
   static classname = 'func_wall';
 

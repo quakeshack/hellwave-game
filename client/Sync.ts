@@ -1,3 +1,4 @@
+import { serializable, serializableObject } from '../../id1/helper/MiscHelpers.ts';
 import { ClientStats, clientStatSlots, parseNumericStatValue } from '../../id1/client/Sync.ts';
 
 import { phases, type HellwavePhase } from '../Phases.ts';
@@ -44,14 +45,15 @@ function isHellwavePhase(value: string): value is HellwavePhase {
  * Keeps track of Hellwave-specific game statistics on the client.
  * NOTE: Make sure to keep it in sync with the server HellwaveStats.
  */
+@serializableObject
 export class HellwaveStatsInfo extends ClientStats {
-  round_total = 0;
-  round_current = 0;
-  squad_total = 0;
-  squad_standing = 0;
-  round_monsters_limit = 0;
-  phase: HellwavePhase | null = null;
-  phase_ending_time = 0;
+  @serializable round_total = 0;
+  @serializable round_current = 0;
+  @serializable squad_total = 0;
+  @serializable squad_standing = 0;
+  @serializable round_monsters_limit = 0;
+  @serializable phase: HellwavePhase | null = null;
+  @serializable phase_ending_time = 0;
 
   /**
    * Apply id1 and Hellwave stat updates to the combined HUD stat table.

@@ -1,7 +1,7 @@
 import type { GameStatsRecipient } from '../../id1/helper/GameStats.ts';
 
 import GameStats from '../../id1/helper/GameStats.ts';
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
 import { clientEvent } from '../Defs.ts';
 import { phases, type HellwavePhase } from '../Phases.ts';
@@ -10,7 +10,7 @@ import { phases, type HellwavePhase } from '../Phases.ts';
  * Tracks Hellwave-specific round and squad state and mirrors it to clients.
  * Keep the client-side sync code aligned with these slots.
  */
-@entity
+@serializableObject
 export default class HellwaveStats extends GameStats {
   @serializable round_current = 0;
   @serializable round_total = 0;

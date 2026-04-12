@@ -57,10 +57,6 @@ export default class HellwaveHUD extends Q1HUD {
     return new HellwaveMessageBag(this.engine, this.sbar);
   }
 
-  override get hudStats(): HellwaveStatsInfo {
-    return super.hudStats as HellwaveStatsInfo;
-  }
-
   protected override _subscribeToEvents(): void {
     super._subscribeToEvents();
 
@@ -194,9 +190,7 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawAccountBalance(): void {
-    const stats = this.hudStats;
-
-    if (stats.phase !== phases.quiet || this.inventory.money[0] === null) {
+    if (this.stats!.phase !== phases.quiet || this.inventory.money[0] === null) {
       return;
     }
 
@@ -215,22 +209,20 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawRoundStats(): void {
-    const stats = this.hudStats;
-
-    if (stats.phase === phases.quiet) {
-      const roundString = `${stats.round_current} / ${stats.round_total}`;
+    if (this.stats!.phase === phases.quiet) {
+      const roundString = `${this.stats!.round_current} / ${this.stats!.round_total}`;
 
       this.sbar.drawString(this.sbar.width - roundString.length * 16, -48, roundString, 2.0);
-      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -80, Q.secsToTime(stats.phase_ending_time - this.engine.CL.gametime), 2.0);
+      this.sbar.drawString(this.sbar.alignCenterHorizontally(16 * 7), -80, Q.secsToTime(this.stats!.phase_ending_time - this.engine.CL.gametime), 2.0);
       return;
     }
 
-    if (stats.phase === phases.normal || stats.phase === phases.action) {
-      const waveString = `${stats.monsters_killed} / ${stats.round_monsters_limit}`;
+    if (this.stats!.phase === phases.normal || this.stats!.phase === phases.action) {
+      const waveString = `${this.stats!.monsters_killed} / ${this.stats!.round_monsters_limit}`;
 
       this.sbar.drawString(this.sbar.width - waveString.length * 16, -48, waveString, 2.0);
     }
 
-    this.sbar.drawString(0, -48, stats.phase === null ? '' : phases[stats.phase], 2.0);
+    this.sbar.drawString(0, -48, this.stats!.phase === null ? '' : phases[this.stats!.phase], 2.0);
   }
 }

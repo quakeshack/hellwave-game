@@ -1,9 +1,8 @@
-import type { SerializableEntity } from '../../../shared/GameInterfaces.ts';
 import type { ServerGameAPI } from '../GameAPI.ts';
 
 import Vector from '../../../shared/Vector.ts';
 
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.ts';
 import { PlayerEntity } from '../../id1/entity/Player.ts';
 import { Backpack, type BackpackPickup } from '../../id1/entity/Weapons.ts';
@@ -42,18 +41,6 @@ interface BuyMenuItem {
   readonly entityClass?: BuyMenuEntityClass;
   readonly backpack?: BuyMenuBackpack;
   readonly spawnflags?: number;
-}
-
-/**
- * Narrow a spawned entity to a Hellwave backpack.
- * @returns Spawned backpack entity.
- */
-function expectHellwaveBackpack(entity: SerializableEntity | null): HellwaveBackpackEntity {
-  if (!(entity instanceof HellwaveBackpackEntity)) {
-    throw new TypeError('Expected HellwaveBackpackEntity spawn result');
-  }
-
-  return entity;
 }
 
 export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
@@ -99,12 +86,12 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
   9: { cost: 1000, label: 'Megahealth', entityClass: HealthItemEntity, spawnflags: HealthItemEntity.H_MEGA },
 };
 
-@entity
+@serializableObject
 export class HellwaveBackpack extends Backpack {
   @serializable money = 0;
 }
 
-@entity
+@serializableObject
 export default class HellwavePlayer extends PlayerEntity {
   @serializable money = 0;
 
@@ -213,7 +200,7 @@ export default class HellwavePlayer extends PlayerEntity {
       throw new TypeError('Expected HellwaveBackpackEntity spawn result');
     }
 
-    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
+    const backpack = spawnedBackpack.entity! as HellwaveBackpackEntity;
 
     this.ammo_cells = 0;
     this.ammo_nails = 0;
@@ -256,7 +243,7 @@ export default class HellwavePlayer extends PlayerEntity {
       throw new TypeError('Expected HellwaveBackpackEntity spawn result');
     }
 
-    const backpack = expectHellwaveBackpack(spawnedBackpack.entity);
+    const backpack = spawnedBackpack.entity! as HellwaveBackpackEntity;
 
     this.updateMoney(-backpack.money);
   }

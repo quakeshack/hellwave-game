@@ -2,12 +2,12 @@ import type { PlayerEntity } from '../../id1/entity/Player.ts';
 import type { ServerGameAPI } from '../GameAPI.ts';
 
 import { BackpackEntity as Id1BackpackEntity, HealthItemEntity as Id1HealthItemEntity } from '../../id1/entity/Items.ts';
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
 import { formatMoney, solid } from '../Defs.ts';
 import { phases } from '../Phases.ts';
 
-@entity
+@serializableObject
 export class HellwaveBackpackEntity extends Id1BackpackEntity {
   @serializable money = 0;
 
@@ -28,7 +28,7 @@ export class HellwaveBackpackEntity extends Id1BackpackEntity {
 /**
  * This version of a megahealth only starts decaying when the quiet phase ended.
  */
-@entity
+@serializableObject
 export class HellwaveHealthItemEntity extends Id1HealthItemEntity {
   protected override _afterTouch(playerEntity: PlayerEntity): void {
     this.solid = solid.SOLID_NOT;

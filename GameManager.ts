@@ -5,7 +5,7 @@ import type HellwaveStats from './helper/HellwaveStats.ts';
 import Vector from '../../shared/Vector.ts';
 
 import BaseEntity from '../id1/entity/BaseEntity.ts';
-import { BaseItemEntity, HealthItemEntity, ItemShellsEntity, ItemSpikesEntity, SuperDamageEntity } from '../id1/entity/Items.ts';
+import { BaseItemEntity, HealthItemEntity, ItemCellsEntity, ItemShellsEntity, ItemSpikesEntity, LightArmorEntity, SuperDamageEntity, WEAPON_BIG2 } from '../id1/entity/Items.ts';
 import { TeleportEffectEntity } from '../id1/entity/Misc.ts';
 import BaseMonster from '../id1/entity/monster/BaseMonster.ts';
 import DogMonsterEntity from '../id1/entity/monster/Dog.ts';
@@ -16,7 +16,7 @@ import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.ts';
 import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.ts';
 import WizardMonsterEntity from '../id1/entity/monster/Wizard.ts';
 import ZombieMonster from '../id1/entity/monster/Zombie.ts';
-import { entity, serializable, Serializer } from '../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable, Serializer } from '../id1/helper/MiscHelpers.ts';
 
 import { clientEvent, items } from './Defs.ts';
 import HellwavePlayer from './entity/Player.ts';
@@ -162,7 +162,7 @@ function getMonsterChoicesForRound(roundNumber: number): readonly MonsterSpawnCh
 /**
  * Drives Hellwave round phases, spawn pacing, and squad progression.
  */
-@entity
+@serializableObject
 export default class GameManager {
   readonly game: ServerGameAPI;
   readonly engine: ServerEngineAPI;
@@ -257,10 +257,7 @@ export default class GameManager {
         attacker.updateMoney(100);
         attacker.frags += 1;
 
-        if (Math.random() < 0.2 && this.available_goodies > 0) {
-          this.dropGoodie(monster, attacker);
-          this.available_goodies -= 1;
-        }
+        this.dropGoodie(monster, attacker);
       }
 
       monster._scheduleThink(this.game.time + Math.random() * 10.0 + 5.0, function (this: BaseMonster): void {
@@ -295,20 +292,45 @@ export default class GameManager {
    * Drop a context-sensitive goodie from a killed monster.
    */
   dropGoodie(monster: BaseMonster, attacker: HellwavePlayer): void {
-    if (attacker.health < 25) {
-      this.dropItem(HealthItemEntity.classname, monster.origin);
+    if (attacker.health < 25 && this.available_goodies > 0) {
+      this.dropItem(HealthItemEntity.classname, monster.origin, {
+        // 10% chance of dropping a mega health, otherwise normal health.
+        spawnflags: Math.random() < 0.1 ? HealthItemEntity.H_MEGA : HealthItemEntity.H_NORMAL,
+      });
+      this.available_goodies -= 1;
       return;
     }
 
-    if ((attacker.items & (items.IT_NAILGUN | items.IT_SUPER_NAILGUN)) !== 0 && attacker.ammo_nails < 20) {
-      this.dropItem(ItemSpikesEntity.classname, monster.origin, {
-        ammo_nails: 50,
+    // If the player has no armor, 25% chance to drop a light armor item.
+    if (attacker.armorvalue === 0 && Math.random() < 0.25 && this.available_goodies > 0) {
+      this.dropItem(LightArmorEntity.classname, monster.origin, {
+        message: `That was free armor for ${attacker.netname}!`,
       });
+      this.available_goodies -= 1;
       return;
+    }
+
+    // 50% chance to drop ammo, prioritizing the weapon the player has equipped with low ammo.
+    if (Math.random() < 0.5) {
+      if ((attacker.items & (items.IT_NAILGUN | items.IT_SUPER_NAILGUN)) !== 0 && attacker.ammo_nails < 25) {
+        this.dropItem(ItemSpikesEntity.classname, monster.origin, {
+          ammo_nails: 50,
+        });
+        return;
+      }
+
+      if ((attacker.items & (items.IT_LIGHTNING)) !== 0 && attacker.ammo_cells < 25) {
+        this.dropItem(ItemCellsEntity.classname, monster.origin, {
+          ammo_cells: 50,
+        });
+        return;
+      }
     }
 
     if ((attacker.items & (items.IT_SHOTGUN | items.IT_SUPER_SHOTGUN)) !== 0 && attacker.ammo_shells < 10) {
-      this.dropItem(ItemShellsEntity.classname, monster.origin);
+      this.dropItem(ItemShellsEntity.classname, monster.origin, {
+        spawnflags: WEAPON_BIG2,
+      });
       return;
     }
 
@@ -318,6 +340,7 @@ export default class GameManager {
     ) {
       this.dropItem(SuperDamageEntity.classname, monster.origin);
       this.available_goodies_quad -= 1;
+      return;
     }
   }
 
@@ -523,14 +546,16 @@ export default class GameManager {
         continue;
       }
 
-      const navpath = this.engine.Navigate(start, end);
+      this.engine.NavigateAsync(start, end).then((navpath) => {
+        if (navpath === null) {
+          return;
+        }
 
-      if (navpath === null) {
-        continue;
-      }
-
-      const visiblePath = navpath.map((waypoint) => waypoint.add(player.view_ofs));
-      this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+        const visiblePath = navpath.map((waypoint) => waypoint.add(player.view_ofs));
+        this.engine.DispatchClientEvent(clientEdict, false, clientEvent.NAV_HINT, ...visiblePath);
+      }).catch(() => {
+        this.engine.ConsoleWarning('Navigation for last enemy hint failed.\n');
+      });
     }
   }
 
@@ -618,7 +643,7 @@ export default class GameManager {
     const ratio = this.round_number_limit > 1 ? (this.round_number - 1) / (this.round_number_limit - 1) : 0;
 
     this.round_monsters_limit = startMonsters + Math.floor((endMonsters - startMonsters) * ratio * clients);
-    this.available_goodies = Math.ceil(this.round_monsters_limit / 10);
+    this.available_goodies = Math.ceil(this.round_monsters_limit / 10) * clients;
     this.available_goodies_quad = Math.floor(this.round_monsters_limit / 30);
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);

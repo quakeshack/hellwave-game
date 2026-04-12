@@ -190,7 +190,7 @@ void describe('GameManager', () => {
 
     assert.equal(manager.round_number, 1);
     assert.equal(manager.round_monsters_limit, 20);
-    assert.equal(manager.available_goodies, 2);
+    assert.equal(manager.available_goodies, 4);
     assert.equal(manager.available_goodies_quad, 0);
     assert.equal(manager.phase, phases.quiet);
     assert.equal(manager.phase_ending_time, 25);

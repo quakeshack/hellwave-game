@@ -3,7 +3,7 @@ import type { ServerGameAPI } from '../GameAPI.ts';
 
 import Vector from '../../../shared/Vector.ts';
 
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 import BaseEntity from '../../id1/entity/BaseEntity.ts';
 import { DebugMarkerEntity, LightEntity, TeleportEffectEntity } from '../../id1/entity/Misc.ts';
 import { PlayerEntity } from '../../id1/entity/Player.ts';
@@ -20,7 +20,7 @@ import { WallEntity } from './Props.ts';
  * Will be automatically kicked out when the round starts.
  * It's also mastering connected entities such as shutters and lights.
  */
-@entity
+@serializableObject
 export class BuyZoneEntity extends BaseTriggerEntity {
   static classname = 'func_buyzone';
 
@@ -184,7 +184,7 @@ export class BuyZoneEntity extends BaseTriggerEntity {
  * style: 0 - default, shutters are closed when the buyzone is closed
  *        1 - inverted, shutters are closed when the buyzone is open
  */
-@entity
+@serializableObject
 export class BuyZoneShuttersEntity extends WallEntity {
   static classname = 'func_buyzone_shutters';
 
@@ -216,7 +216,7 @@ export class BuyZoneShuttersEntity extends WallEntity {
  * QUAKED func_spawnzone_monsters (0.5 0 0.5) ?
  * Spawn area. Monsters will be spawned inside this area.
  */
-@entity
+@serializableObject
 export class MonstersSpawnZoneEntity extends BaseEntity {
   static classname = 'func_spawnzone_monsters';
 
@@ -250,7 +250,7 @@ export class MonstersSpawnZoneEntity extends BaseEntity {
  * QUAKED func_spawnzone_players (0.5 0 0.5) ?
  * Spawn area. Players will be teleported inside this area when they get kicked out of the buyzone.
  */
-@entity
+@serializableObject
 export class PlayersSpawnZoneEntity extends BaseEntity {
   static classname = 'func_spawnzone_players';
 

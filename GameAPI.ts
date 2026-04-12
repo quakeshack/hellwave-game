@@ -4,9 +4,9 @@ import { cvarFlags } from '../../shared/Defs.ts';
 import { entityClasses as id1EntityClasses, featureFlags, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
 import type { EntityClass } from '../id1/entity/BaseEntity.ts';
 import EntityRegistry from '../id1/helper/Registry.ts';
-import { entity, serializable } from '../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../id1/helper/MiscHelpers.ts';
 import { HellwaveBackpackEntity, HellwaveHealthItemEntity } from './entity/Items.ts';
-import { HellwaveDogMonsterEntity } from './entity/Monsters.ts';
+import { HellwaveDogMonsterEntity, HellwaveSoldierMonsterEntity, HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
 import HellwavePlayer from './entity/Player.ts';
 import { WallEntity } from './entity/Props.ts';
 import { HellwaveSuperspike } from './entity/Weapons.ts';
@@ -40,6 +40,8 @@ const entityClasses = [
   MonstersSpawnZoneEntity,
   PlayersSpawnZoneEntity,
   HellwaveSuperspike,
+  HellwaveZombieMonsterEntity,
+  HellwaveSoldierMonsterEntity,
 ] satisfies readonly EntityClass[];
 
 /**
@@ -56,7 +58,7 @@ function expectHellwavePlayer(clientEdict: ServerEdict): HellwavePlayer {
   return playerEntity;
 }
 
-@entity
+@serializableObject
 class HellwaveServerGameAPI extends id1ServerGameAPI {
   static _entityRegistry = new EntityRegistry(entityClasses);
 

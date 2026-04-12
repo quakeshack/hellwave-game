@@ -2,7 +2,7 @@ import Vector from '../../../shared/Vector.ts';
 
 import type BaseEntity from '../../id1/entity/BaseEntity.ts';
 import { Superspike as Id1Superspike } from '../../id1/entity/Weapons.ts';
-import { entity, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
 import { channel } from '../Defs.ts';
 
@@ -12,7 +12,7 @@ const ricochetSounds = [
   'weapons/ric3.wav',
 ] as const;
 
-@entity
+@serializableObject
 export class HellwaveSuperspike extends Id1Superspike {
   @serializable private _direction = new Vector();
   @serializable private _richochetsLeft = 3;
