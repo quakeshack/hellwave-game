@@ -1,4 +1,5 @@
-import type { ClientEdict } from '../../../shared/GameInterfaces.ts';
+import { serializable, serializableObject } from '@/game/id1/helper/MiscHelpers.ts';
+import type { ClientEdict, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
@@ -40,9 +41,22 @@ function calculatePlayerNameScale(distance: number): number {
   return maxScale - distanceFraction * (maxScale - minScale);
 }
 
+const gameoverPostProcessStack = [
+  { id: 'color-grade', settings: { saturation: 0.0, tintColor: new Vector(1.0, 0.0, 0.0), tintStrength: 1.0, pulsePeriod: 1.0, pulseStrength: 0.5 } },
+  { id: 'blur', settings: { radius: 3.0 } },
+] as PostProcessStack;
+
+const buymenuPostProcessStack = [
+  { id: 'color-grade', settings: { saturation: 0.3 } },
+  { id: 'blur', settings: { radius: 8 } },
+] as PostProcessStack;
+
+@serializableObject
 export default class HellwaveHUD extends Q1HUD {
   declare protected readonly game: ClientGameAPI;
   declare protected stats: HellwaveStatsInfo | null;
+
+  @serializable protected lastBuyzone = -1;
 
   inventory: { money: MoneyBalanceState } = {
     /** Current account balance [new balance, old balance, timestamp]. */
@@ -76,9 +90,15 @@ export default class HellwaveHUD extends Q1HUD {
           this.game.sfx.phase.normal[Math.floor(Math.random() * this.game.sfx.phase.normal.length)]?.play();
           break;
 
+        case phases.gameover:
+          this.engine.PostProcess.setStack(gameoverPostProcessStack);
+          return;
+
         default:
           break;
       }
+
+      this.engine.PostProcess.clearStack();
     });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance: number): void => {
@@ -158,6 +178,19 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawBuyMenu(): void {
+    // update post-process stack based on buyzone state
+    if (this.lastBuyzone !== this.game.clientdata.buyzone && this.stats!.phase !== phases.gameover) {
+      switch (this.game.clientdata.buyzone) {
+        case 2:
+          this.engine.PostProcess.setStack(buymenuPostProcessStack);
+          break;
+        default:
+          this.engine.PostProcess.clearStack();
+          break;
+      }
+      this.lastBuyzone = this.game.clientdata.buyzone;
+    }
+
     if (this.game.clientdata.buyzone === 0) {
       return;
     }
