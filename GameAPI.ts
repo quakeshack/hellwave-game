@@ -13,6 +13,7 @@ import { HellwaveSuperspike } from './entity/Weapons.ts';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.ts';
 import GameManager from './GameManager.ts';
 import HellwaveStats from './helper/HellwaveStats.ts';
+import { HellwaveBossMonsterEntity, HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
 
 interface HellwaveCvarMap extends Record<keyof typeof id1ServerGameAPI._cvars, Cvar | null> {
   rounds: Cvar | null;
@@ -24,8 +25,9 @@ interface HellwaveCvarMap extends Record<keyof typeof id1ServerGameAPI._cvars, C
 
 // Enable some features that stray from the original vanilla behavior.
 featureFlags.push(
-  'draw-bullet-hole-decals',
-  'correct-ballistic-grenades',
+  'draw-bullet-hole-decals', // draw bullet holes
+  'correct-ballistic-grenades', // zombies and ogres toss properly
+  'monsters-dangerous-liquids', // monsters take damage from lava and slime
 );
 
 const entityClasses = [
@@ -42,21 +44,9 @@ const entityClasses = [
   HellwaveSuperspike,
   HellwaveZombieMonsterEntity,
   HellwaveSoldierMonsterEntity,
+  HellwaveBossMonsterEntity,
+  HellwaveBossMonsterSpawnMarker,
 ] satisfies readonly EntityClass[];
-
-/**
- * Require a connected Hellwave player entity.
- * @returns Connected Hellwave player.
- */
-function expectHellwavePlayer(clientEdict: ServerEdict): HellwavePlayer {
-  const playerEntity = clientEdict.entity;
-
-  if (!(playerEntity instanceof HellwavePlayer)) {
-    throw new TypeError('Expected HellwavePlayer entity');
-  }
-
-  return playerEntity;
-}
 
 @serializableObject
 class HellwaveServerGameAPI extends id1ServerGameAPI {
@@ -138,21 +128,27 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
   }
 
   override ClientConnect(clientEdict: ServerEdict): void {
-    const playerEntity = expectHellwavePlayer(clientEdict);
+    const playerEntity = clientEdict.entity as HellwavePlayer;
+    console.assert(playerEntity instanceof HellwavePlayer);
+
     playerEntity.connected();
 
     this.manager.clientConnected(playerEntity);
   }
 
   override ClientDisconnect(clientEdict: ServerEdict): void {
-    const playerEntity = expectHellwavePlayer(clientEdict);
+    const playerEntity = clientEdict.entity as HellwavePlayer;
+    console.assert(playerEntity instanceof HellwavePlayer);
+
     playerEntity.disconnected();
 
     this.manager.clientDisconnected(playerEntity);
   }
 
   ClientBegin(clientEdict: ServerEdict): void {
-    const playerEntity = expectHellwavePlayer(clientEdict);
+    const playerEntity = clientEdict.entity as HellwavePlayer;
+    console.assert(playerEntity instanceof HellwavePlayer);
+
     this.manager.clientBeing(playerEntity);
   }
 
@@ -177,7 +173,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
     // Make sure the round manager is subscribed after a map start or changelevel.
     this.manager.subscribeToEvents();
 
-    this.manager.round_number_limit = Math.max(1, Math.min(12, this.rounds));
+    this.manager.round_number_limit = Math.max(2, Math.min(12, this.rounds));
   }
 
   static override GetMapList(): MapDetails[] {

@@ -106,6 +106,34 @@ void describe('Hellwave HUD', () => {
       Math.random = originalRandom;
     }
   });
+
+  void test('reacts to clientdata field-change events for buyzone and money', () => {
+    const postProcessSetStacks = [];
+    const engine = createMockClientEngine({
+      PostProcess: {
+        setStack(stack) {
+          postProcessSetStacks.push(stack);
+        },
+        clearStack() {
+        },
+        hasStack() {
+          return postProcessSetStacks.length > 0;
+        },
+      },
+    });
+    const game = createHellwaveGame(engine, {
+      clientdata: createClientdata({ buyzone: 0, money: 0 }),
+    });
+    const hud = new HellwaveHUD(game, engine);
+
+    hud.init();
+
+    engine.eventBus.publish('client.clientdata.field-changed', 'buyzone', 2, 0);
+    engine.eventBus.publish('client.clientdata.field-changed', 'money', 400, 250);
+
+    assert.equal(postProcessSetStacks.length, 1);
+    assert.deepEqual(hud.inventory.money, [400, null, 0]);
+  });
 });
 
 void describe('Hellwave client API', () => {

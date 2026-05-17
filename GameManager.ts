@@ -1,4 +1,4 @@
-import type { EdictData, ServerEngineAPI } from '../../shared/GameInterfaces.ts';
+import type { EdictData, ServerEdict, ServerEngineAPI } from '../../shared/GameInterfaces.ts';
 import type { ServerGameAPI } from './GameAPI.ts';
 import type HellwaveStats from './helper/HellwaveStats.ts';
 
@@ -18,10 +18,11 @@ import WizardMonsterEntity from '../id1/entity/monster/Wizard.ts';
 import ZombieMonster from '../id1/entity/monster/Zombie.ts';
 import { serializableObject, serializable, Serializer } from '../id1/helper/MiscHelpers.ts';
 
-import { clientEvent, items } from './Defs.ts';
+import { clientEvent, items, solid } from './Defs.ts';
 import HellwavePlayer from './entity/Player.ts';
 import { BuyZoneEntity } from './entity/Zones.ts';
 import { phases, type HellwavePhase } from './Phases.ts';
+import { HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
 
 interface MonsterSpawnChoice {
   readonly classname: string;
@@ -197,7 +198,7 @@ export default class GameManager {
     this._serializer = new Serializer(this, game.engine);
   }
 
-  openRandomShop(): void {
+  protected openRandomShop(): void {
     if (this.designed_buyzone !== null) {
       return;
     }
@@ -222,7 +223,7 @@ export default class GameManager {
     this.engine.BroadcastPrint('Store is open!\n');
   }
 
-  closeShops(): void {
+  protected closeShops(): void {
     for (const edict of this.engine.FindAllByFilter((candidate) => candidate.entity instanceof BuyZoneEntity)) {
       const zone = edict.entity;
 
@@ -239,7 +240,7 @@ export default class GameManager {
     this.engine.eventBus.subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
       if (newPhase === phases.quiet) {
         this.openRandomShop();
-      } else if (newPhase === phases.normal) {
+      } else {
         this.closeShops();
       }
     });
@@ -271,7 +272,7 @@ export default class GameManager {
   /**
    * Spawn a pickup entity and toss it into the world.
    */
-  dropItem(entityClassname: string, origin: Vector, params: EdictData = {}): void {
+  protected dropItem(entityClassname: string, origin: Vector, params: EdictData = {}): void {
     const spawnedItem = this.engine.SpawnEntity(entityClassname, {
       origin: origin.copy(),
       regeneration_time: 0,
@@ -291,7 +292,7 @@ export default class GameManager {
   /**
    * Drop a context-sensitive goodie from a killed monster.
    */
-  dropGoodie(monster: BaseMonster, attacker: HellwavePlayer): void {
+  protected dropGoodie(monster: BaseMonster, attacker: HellwavePlayer): void {
     if (attacker.health < 25 && this.available_goodies > 0) {
       this.dropItem(HealthItemEntity.classname, monster.origin, {
         // 10% chance of dropping a mega health, otherwise normal health.
@@ -344,11 +345,12 @@ export default class GameManager {
     }
   }
 
-  spawnEnemies(): void {
+  protected spawnEnemies(): void {
     if (this.spawn_next > this.game.time) {
       return;
     }
 
+    // TODO: no limit in bossfight phase
     if (this.game.maxmonstersalive > 0) {
       const clients = Array.from(this.engine.GetClients()).length;
 
@@ -370,22 +372,20 @@ export default class GameManager {
     }
 
     const origin = new Vector();
-    const mins = new Vector(-16, -16, 0);
-    const maxs = new Vector(16, 16, 16);
-    const spacer = new Vector(0, 0, 64);
-
     const offset = Math.floor(Math.random() * this.spawnpoints.length);
 
     for (let i = 0; i < this.spawnpoints.length; i++) {
       const spot = this.spawnpoints[(i + offset) % this.spawnpoints.length].copy();
-      const trace = this.engine.Traceline(spot.copy().add(spacer), spot, false, null, mins, maxs);
 
-      if (trace.fraction < 1.0) {
+      // works better than traceline: Octree lookup (FindInRadius)
+      const nearbyEntities = this.engine.FindInRadius(spot, 64.0, (edict) => edict.entity?.solid !== solid.SOLID_NOT);
+
+      if (nearbyEntities.length > 0) {
         continue;
       }
 
       origin.set(spot);
-      origin[2] += 16.0;
+      origin[2] += 1.0;
       break;
     }
 
@@ -398,9 +398,9 @@ export default class GameManager {
     const alivePlayers: HellwavePlayer[] = [];
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = clientEdict.entity;
+      const player = clientEdict.entity as HellwavePlayer;
 
-      if (!(player instanceof HellwavePlayer) || player.spectating || player.health <= 0) {
+      if (player.spectating || player.health <= 0) {
         continue;
       }
 
@@ -478,15 +478,15 @@ export default class GameManager {
     this.assessGameState();
   }
 
-  showNavigationBuyzoneHint(): void {
+  protected showNavigationBuyzoneHint(): void {
     if (this.designed_buyzone === null) {
       return;
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = clientEdict.entity;
+      const player = clientEdict.entity as HellwavePlayer;
 
-      if (!(player instanceof HellwavePlayer) || player.spectating || player.buyzone !== 0) {
+      if (player.spectating || player.buyzone !== 0) {
         continue;
       }
 
@@ -506,7 +506,7 @@ export default class GameManager {
     }
   }
 
-  showLastEnemyHint(): void {
+  protected showLastEnemyHint(): void {
     let lastMonster: BaseMonster | null = null;
 
     for (const edict of this.engine.FindAllByFilter((candidate) => candidate.entity instanceof BaseMonster && candidate.entity.health > 0)) {
@@ -523,9 +523,9 @@ export default class GameManager {
     }
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = clientEdict.entity;
+      const player = clientEdict.entity as HellwavePlayer;
 
-      if (!(player instanceof HellwavePlayer) || player.spectating) {
+      if (player.spectating) {
         continue;
       }
 
@@ -562,7 +562,7 @@ export default class GameManager {
   /**
    * Assess the current round state and transition phases when required.
    */
-  assessGameState(): void {
+  protected assessGameState(): void {
     if (this.game.intermission_running > 0) {
       return;
     }
@@ -570,6 +570,13 @@ export default class GameManager {
     switch (this.phase) {
       case phases.quiet:
         if (this.phase_ending_time <= this.game.time) {
+          // TODO: check if bossfight is actually possible (enough rounds, eligible spawn points, etc.)
+          if (this.round_number === this.round_number_limit && this.round_number_limit > 0) {
+            this.engine.ConsolePrint('Time for the boss fight!\n');
+            this.startBossFightPhase();
+            return;
+          }
+
           this.startNormalPhase();
         }
 
@@ -607,12 +614,16 @@ export default class GameManager {
         }
         break;
 
+      case phases.bossfight:
+        // TODO: bossfight, basically spawn monsters with no limit and wait for the boss to die, then transition to victory phase after a delay
+        break;
+
       case phases.waiting:
         break;
     }
   }
 
-  roundFinished(): void {
+  protected roundFinished(): void {
     this.engine.BroadcastPrint('Round complete! Well done!\n');
     this.startNextRound();
   }
@@ -620,19 +631,19 @@ export default class GameManager {
   /**
    * Start the next round and reinitialize round-scoped pacing variables.
    */
-  startNextRound(): void {
-    if (this.round_number === this.round_number_limit && this.round_number_limit > 0) {
+  protected startNextRound(): void {
+    if (this.round_number >= this.round_number_limit && this.round_number_limit > 0) {
       this.engine.ConsolePrint('Maximum number of rounds reached.\n');
       this.startVictoryPhase();
       return;
     }
 
     for (const edict of this.engine.FindAllByFilter((candidate) => candidate.entity instanceof BaseMonster)) {
-      const monster = edict.entity;
+      const monster = edict.entity as BaseMonster;
 
-      if (monster instanceof BaseMonster) {
-        monster.lazyRemove();
-      }
+      monster.lazyRemove();
+
+      // TODO: would be cool to have a teleport out effect here
     }
 
     this.round_number += 1;
@@ -649,11 +660,35 @@ export default class GameManager {
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
 
     this.startQuietPhase();
+    this.bringInNextRoundPlayers();
+  }
 
+  protected startBossFight(): void {
+    const userEntity = (this.engine.GetClients().next().value as ServerEdict).entity! as HellwavePlayer;
+    console.assert(userEntity instanceof HellwavePlayer, 'startBossFight requires at least one connected player');
+
+    for (const edict of this.engine.FindAllByFilter((candidate) => candidate.entity instanceof HellwaveBossMonsterSpawnMarker)) {
+      const spawnMarker = edict.entity as HellwaveBossMonsterSpawnMarker;
+
+      const boss = this.engine.SpawnEntity(spawnMarker.bossClassname, {
+        origin: spawnMarker.origin,
+        angles: spawnMarker.angles,
+      })!.entity as BaseEntity;
+
+      // trigger the boss, if requested
+      if (spawnMarker.useAfterSpawn) {
+        boss.use(userEntity);
+      }
+
+      spawnMarker.use(userEntity);
+    }
+  }
+
+  protected bringInNextRoundPlayers(): void {
     for (const client of this.engine.GetClients()) {
-      const player = client.entity;
+      const player = client.entity as HellwavePlayer;
 
-      if (!(player instanceof HellwavePlayer) || !player.spectating) {
+      if (!player.spectating) {
         continue;
       }
 
@@ -661,7 +696,7 @@ export default class GameManager {
     }
   }
 
-  startQuietPhase(): void {
+  protected startQuietPhase(): void {
     this.next_hint_time = this.game.time + 3.0;
 
     this.phase = phases.quiet;
@@ -673,7 +708,7 @@ export default class GameManager {
     this.engine.PlayTrack(0);
   }
 
-  startNormalPhase(): void {
+  protected startNormalPhase(): void {
     this.spawn_next = this.game.time + 5.0;
 
     this.phase = phases.normal;
@@ -688,7 +723,7 @@ export default class GameManager {
     this.engine.PlayTrack(worldspawn.sounds);
   }
 
-  startActionPhase(): void {
+  protected startActionPhase(): void {
     this.phase = phases.action;
     this.phase_ending_time = Infinity;
 
@@ -696,7 +731,7 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.endingtime', 0);
   }
 
-  startGameOverPhase(): void {
+  protected startGameOverPhase(): void {
     this.engine.PlayTrack(3);
 
     this.phase = phases.gameover;
@@ -706,11 +741,21 @@ export default class GameManager {
     this.engine.eventBus.publish('game.phase.endingtime', 0);
   }
 
-  startVictoryPhase(): void {
-    this.game.startIntermission();
+  protected startVictoryPhase(): void {
+    this.game.startIntermission(); // the only call to the original game structure
 
     this.phase = phases.victory;
     this.phase_ending_time = this.game.time + 30.0;
+
+    this.engine.eventBus.publish('game.phase.changed', this.phase);
+    this.engine.eventBus.publish('game.phase.endingtime', 0);
+  }
+
+  protected startBossFightPhase(): void {
+    this.startBossFight();
+
+    this.phase = phases.bossfight;
+    this.phase_ending_time = Infinity;
 
     this.engine.eventBus.publish('game.phase.changed', this.phase);
     this.engine.eventBus.publish('game.phase.endingtime', 0);
@@ -741,16 +786,12 @@ export default class GameManager {
     }
   }
 
-  checkSquadStatus(skipPlayerEntity: HellwavePlayer | null = null): void {
+  protected checkSquadStatus(skipPlayerEntity: HellwavePlayer | null = null): void {
     let squadTotal = 0;
     let squadStanding = 0;
 
     for (const clientEdict of this.engine.GetClients()) {
-      const player = clientEdict.entity;
-
-      if (!(player instanceof HellwavePlayer)) {
-        continue;
-      }
+      const player = clientEdict.entity as HellwavePlayer;
 
       if (skipPlayerEntity !== null && player.equals(skipPlayerEntity)) {
         continue;
@@ -788,7 +829,7 @@ export default class GameManager {
     this.closeShops();
   }
 
-  resetGame(): void {
+  protected resetGame(): void {
     const mapname = this.game.mapname!;
     console.assert(mapname !== null, 'resetGame requires an active map name');
     this.engine.ChangeLevel(mapname);

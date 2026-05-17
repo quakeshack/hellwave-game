@@ -7,7 +7,7 @@ import Vector from '../../../shared/Vector.ts';
 import { MessageBag, Q1HUD } from '../../id1/client/HUD.ts';
 import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.ts';
 import { buyMenuItems } from '../entity/Player.ts';
-import { phases } from '../Phases.ts';
+import { phaseLabels, phases } from '../Phases.ts';
 
 import type { ClientGameAPI } from './ClientAPI.ts';
 import { HellwaveStatsInfo } from './Sync.ts';
@@ -56,8 +56,6 @@ export default class HellwaveHUD extends Q1HUD {
   declare protected readonly game: ClientGameAPI;
   declare protected stats: HellwaveStatsInfo | null;
 
-  @serializable protected lastBuyzone = -1;
-
   inventory: { money: MoneyBalanceState } = {
     /** Current account balance [new balance, old balance, timestamp]. */
     money: [null, null, -Infinity],
@@ -73,6 +71,23 @@ export default class HellwaveHUD extends Q1HUD {
 
   protected override _subscribeToEvents(): void {
     super._subscribeToEvents();
+
+    this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: number | string | boolean | null): void => {
+      switch (field) {
+        case 'buyzone':
+          console.assert(typeof value === 'number' && value >= -1 && value <= 2);
+          this.#updateBuyzonePostProcess(value as -1 | 0 | 1 | 2);
+          break;
+
+        case 'money':
+          console.assert(typeof value === 'number');
+          this.inventory.money = [value as number, this.inventory.money[0], this.engine.CL.gametime];
+          break;
+
+        default:
+          break;
+      }
+    });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.STATS_UPDATED), (slot: string, value: number | string): void => {
       if (slot !== 'phase') {
@@ -178,19 +193,6 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   #drawBuyMenu(): void {
-    // update post-process stack based on buyzone state
-    if (this.lastBuyzone !== this.game.clientdata.buyzone && this.stats!.phase !== phases.gameover) {
-      switch (this.game.clientdata.buyzone) {
-        case 2:
-          this.engine.PostProcess.setStack(buymenuPostProcessStack);
-          break;
-        default:
-          this.engine.PostProcess.clearStack();
-          break;
-      }
-      this.lastBuyzone = this.game.clientdata.buyzone;
-    }
-
     if (this.game.clientdata.buyzone === 0) {
       return;
     }
@@ -256,6 +258,19 @@ export default class HellwaveHUD extends Q1HUD {
       this.sbar.drawString(this.sbar.width - waveString.length * 16, -48, waveString, 2.0);
     }
 
-    this.sbar.drawString(0, -48, this.stats!.phase === null ? '' : phases[this.stats!.phase], 2.0);
+    this.sbar.drawString(0, -48, phaseLabels[this.stats!.phase!] ?? '', 2.0);
+  }
+
+  #updateBuyzonePostProcess(buyzone: -1 | 0 | 1 | 2): void {
+    if (this.stats?.phase !== phases.gameover) {
+      switch (buyzone) {
+        case 2:
+          this.engine.PostProcess.setStack(buymenuPostProcessStack);
+          break;
+        default:
+          this.engine.PostProcess.clearStack();
+          break;
+      }
+    }
   }
 }
