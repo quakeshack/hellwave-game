@@ -1,4 +1,4 @@
-import { serializable, serializableObject } from '@/game/id1/helper/MiscHelpers.ts';
+import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
 import type { ClientEdict, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import Q from '../../../shared/Q.ts';

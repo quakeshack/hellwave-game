@@ -1,4 +1,4 @@
-import { InfoNotNullEntity } from '@/game/id1/entity/Misc';
+import { InfoNotNullEntity } from '../../id1/entity/Misc';
 import { BossMonster } from '../../id1/entity/monster/Boss.ts';
 import { serializable, serializableObject } from '../../id1/helper/MiscHelpers.ts';
 
