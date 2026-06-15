@@ -1,7 +1,8 @@
 import type { Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
 
 import { cvarFlags } from '../../shared/Defs.ts';
-import { entityClasses as id1EntityClasses, featureFlags, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
+import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
+import { featureFlags } from '../id1/featureFlags.ts';
 import type { EntityClass } from '../id1/entity/BaseEntity.ts';
 import EntityRegistry from '../id1/helper/Registry.ts';
 import { serializableObject, serializable } from '../id1/helper/MiscHelpers.ts';
