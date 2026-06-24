@@ -1,3 +1,4 @@
+import type BaseEntity from '@/game/id1/entity/BaseEntity.ts';
 import { InfoNotNullEntity } from '../../id1/entity/Misc';
 import { BossMonster } from '../../id1/entity/monster/Boss.ts';
 import { serializable, serializableObject } from '../../id1/helper/MiscHelpers.ts';
@@ -29,5 +30,14 @@ export class HellwaveBossMonsterSpawnMarker extends InfoNotNullEntity {
     return this.classname_boss;
   }
 
-  // TODO: add use cascade
+  use(usedByEntity: BaseEntity): void {
+    if (this.target === null) {
+      return;
+    }
+
+    // trigger all connected entities
+    for (const entity of this.findAllEntitiesByFieldAndValue('targetname', this.target)) {
+      entity.use(usedByEntity);
+    }
+  }
 }

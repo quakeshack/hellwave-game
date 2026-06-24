@@ -189,6 +189,8 @@ export default class GameManager {
   @serializable available_goodies = 0;
   /** Remaining number of quad-damage drops allowed this round. */
   @serializable available_goodies_quad = 0;
+  /** Whether a boss fight can occur on the current map. */
+  @serializable canHaveBossfight = false;
   /** Whether the one-time startup init ran after the first connect. */
   @serializable gameInitialized = false;
 
@@ -266,6 +268,56 @@ export default class GameManager {
       });
 
       this.next_hint_time = this.game.time + 15.0;
+    });
+  }
+
+  #initBossVictoryConditions() {
+    // 1. find the info_boss_marker to determine the boss monster for this map
+    // 2. count how many there are
+    // 3. hook up the game.monster.killed event
+    // 4. 10 seconds after the last boss is killed, end the round and declare victory
+
+    const bossMarkers = Array.from(this.engine.FindAllByFieldAndValue('classname', HellwaveBossMonsterSpawnMarker.classname));
+
+    if (bossMarkers.length === 0) {
+      this.engine.ConsoleDebug('No info_boss_marker found for this map. Surviving last round will turn into victory.');
+      this.canHaveBossfight = false;
+      return;
+    }
+
+    // we can have a boss fight on this map
+    this.canHaveBossfight = true;
+
+    const bosses = new Set<string>();
+
+    // collect the boss classnames from the markers
+    for (const { entity } of bossMarkers) {
+      console.assert(entity instanceof HellwaveBossMonsterSpawnMarker, 'info_boss_marker entity is not a HellwaveBossMonsterSpawnMarker');
+
+      const marker = entity as HellwaveBossMonsterSpawnMarker;
+
+      bosses.add(marker.bossClassname);
+    }
+
+    // actual counting
+    let bossesRemaining = bossMarkers.length;
+
+    this.engine.eventBus.subscribe('game.monster.killed', (monster: BaseMonster): void => {
+      // only pay attention when in bossfight phase
+      if (this.phase !== phases.bossfight) {
+        return;
+      }
+
+      // is it really a boss?
+      if (!bosses.has(monster.classname)) {
+        return;
+      }
+
+      // if the last boss was killed, schedule a victory after 10 seconds
+      if (--bossesRemaining <= 0) {
+        this.engine.BroadcastPrint('All bosses defeated! Well done!\n');
+        this.phase_ending_time = this.game.time + 10.0;
+      }
     });
   }
 
@@ -570,9 +622,15 @@ export default class GameManager {
     switch (this.phase) {
       case phases.quiet:
         if (this.phase_ending_time <= this.game.time) {
-          // TODO: check if bossfight is actually possible (enough rounds, eligible spawn points, etc.)
           if (this.round_number === this.round_number_limit && this.round_number_limit > 0) {
-            this.engine.ConsolePrint('Time for the boss fight!\n');
+            // in case the map does not support a boss fight, we can declare victory here
+            if (!this.canHaveBossfight) {
+              this.engine.ConsolePrint('You survived all rounds! Well done!\n');
+              this.startVictoryPhase();
+              return;
+            }
+
+            this.engine.ConsolePrint('No rest for the wicked, it is time for the boss fight!\n');
             this.startBossFightPhase();
             return;
           }
@@ -615,6 +673,10 @@ export default class GameManager {
         break;
 
       case phases.bossfight:
+        if (this.phase_ending_time <= this.game.time) {
+          this.startVictoryPhase();
+          return;
+        }
         // TODO: bossfight, basically spawn monsters with no limit and wait for the boss to die, then transition to victory phase after a delay
         break;
 
@@ -827,6 +889,9 @@ export default class GameManager {
 
   #initGame(): void {
     this.closeShops();
+
+    // Prepare the boss victory conditions for the current map
+    this.#initBossVictoryConditions();
   }
 
   protected resetGame(): void {
