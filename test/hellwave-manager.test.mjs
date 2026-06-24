@@ -145,8 +145,8 @@ void describe('GameManager', () => {
       'designed_buyzone',
       'available_goodies',
       'available_goodies_quad',
-      'gameInitialized',
       'canHaveBossfight',
+      'gameInitialized',
     ]);
 
     assert.deepEqual(manager._serializer.serialize(), {
