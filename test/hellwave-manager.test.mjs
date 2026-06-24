@@ -146,6 +146,7 @@ void describe('GameManager', () => {
       'available_goodies',
       'available_goodies_quad',
       'gameInitialized',
+      'canHaveBossfight',
     ]);
 
     assert.deepEqual(manager._serializer.serialize(), {
@@ -161,6 +162,7 @@ void describe('GameManager', () => {
       round_number_limit: ['P', 0],
       spawn_next: ['P', 0],
       spawnpoints: ['A', []],
+      canHaveBossfight: ['P', false],
     });
   });
 
