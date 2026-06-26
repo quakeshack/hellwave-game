@@ -287,16 +287,19 @@ export default class HellwavePlayer extends PlayerEntity {
     this.game.stats.sendToPlayer(this);
     this.updateMoney();
 
-    if (manager.phase !== phases.quiet && manager.phase !== phases.waiting) {
+    const shouldSpectate = manager.phase !== phases.quiet && manager.phase !== phases.waiting;
+
+    if (shouldSpectate) {
       this._spectate();
     } else {
       this._unspectate();
     }
 
     // select spawn spot
-    const spot = this._selectSpawnPoint();
+    const spot = shouldSpectate ? this._intermissionFindSpot() : this._selectSpawnPoint();
     this.origin = spot.origin.copy().add(new Vector(0.0, 0.0, 1.0));
     this.angles = spot.angles.copy();
+    this.angles[2] = 0; // do not apply roll
     this.setOrigin(this.origin);
   }
 

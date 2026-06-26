@@ -158,7 +158,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
     Object.assign(this._cvars, id1ServerGameAPI._cvars);
 
-    this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '12', 0, 'Number of rounds to play in a map. Must be set before the map starts. 0 = infinite rounds.');
+    this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '10', 0, 'Number of rounds to play in a map. Must be set before the map starts. Minimum 2, maximum 12.');
     this._cvars.quiettime = serverEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
     this._cvars.normaltime = serverEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     this._cvars.maxmonstersalive = serverEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
@@ -173,8 +173,6 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
     // Make sure the round manager is subscribed after a map start or changelevel.
     this.manager.subscribeToEvents();
-
-    this.manager.round_number_limit = Math.max(2, Math.min(12, this.rounds));
   }
 
   static override GetMapList(): MapDetails[] {

@@ -157,7 +157,7 @@ function canSpawnChoice(engine: ServerEngineAPI, choice: MonsterSpawnChoice): bo
  */
 function getMonsterChoicesForRound(roundNumber: number): readonly MonsterSpawnChoice[] {
   const roundKey = Math.min(roundNumber, highestConfiguredRound) as keyof typeof gameRoundMonsterMatrix;
-  return gameRoundMonsterMatrix[roundKey] ?? [];
+  return gameRoundMonsterMatrix[roundKey] ?? gameRoundMonsterMatrix[1];
 }
 
 /**
@@ -179,7 +179,7 @@ export default class GameManager {
   @serializable phase_ending_time = 0;
   @serializable round_number = 0;
   @serializable round_number_limit = 0;
-  /** Maximum monsters that can spawn during the current round. */
+  /** Maximum monsters that can spawn during the current round. Ignored during bossfight. */
   @serializable round_monsters_limit = 0;
   /** Absolute game time when the next navigation hint may be sent. */
   @serializable next_hint_time = 0;
@@ -189,7 +189,7 @@ export default class GameManager {
   @serializable available_goodies = 0;
   /** Remaining number of quad-damage drops allowed this round. */
   @serializable available_goodies_quad = 0;
-  /** Whether a boss fight can occur on the current map. */
+  /** Whether a boss fight can occur on the current map. Will be set to false when all bosses are defeated to stop the enemy spawner. */
   @serializable canHaveBossfight = false;
   /** Whether the one-time startup init ran after the first connect. */
   @serializable gameInitialized = false;
@@ -242,7 +242,7 @@ export default class GameManager {
     this.engine.eventBus.subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
       if (newPhase === phases.quiet) {
         this.openRandomShop();
-      } else {
+      } else if (newPhase === phases.normal) {
         this.closeShops();
       }
     });
@@ -269,6 +269,10 @@ export default class GameManager {
 
       this.next_hint_time = this.game.time + 15.0;
     });
+  }
+
+  #configureGameSettings(): void {
+    this.round_number_limit = Math.max(1, Math.min(12, this.game.rounds));
   }
 
   #initBossVictoryConditions() {
@@ -301,6 +305,7 @@ export default class GameManager {
 
     // actual counting
     let bossesRemaining = bossMarkers.length;
+    const multipleBosses = bossesRemaining > 1;
 
     this.engine.eventBus.subscribe('game.monster.killed', (monster: BaseMonster): void => {
       // only pay attention when in bossfight phase
@@ -315,9 +320,18 @@ export default class GameManager {
 
       // if the last boss was killed, schedule a victory after 10 seconds
       if (--bossesRemaining <= 0) {
-        this.engine.BroadcastPrint('All bosses defeated! Well done!\n');
+        if (multipleBosses) {
+          this.engine.BroadcastPrint('All bosses defeated! Well done!\n');
+        } else {
+          this.engine.BroadcastPrint('Boss defeated! Well done!\n');
+        }
+
         this.phase_ending_time = this.game.time + 10.0;
+        this.canHaveBossfight = false;
+        return;
       }
+
+      this.engine.BroadcastPrint(`One boss defeated! ${bossesRemaining} more to go!\n`);
     });
   }
 
@@ -402,7 +416,10 @@ export default class GameManager {
       return;
     }
 
-    // TODO: no limit in bossfight phase
+    if (this.spawnpoints.length === 0) {
+      return;
+    }
+
     if (this.game.maxmonstersalive > 0) {
       const clients = Array.from(this.engine.GetClients()).length;
 
@@ -411,16 +428,14 @@ export default class GameManager {
       }
     }
 
-    if (this.game.stats.monsters_total >= this.round_monsters_limit) {
-      return;
-    }
+    if (this.phase !== phases.bossfight) {
+      if (this.game.stats.monsters_total >= this.round_monsters_limit) {
+        return;
+      }
 
-    if (this.spawnpoints.length === 0) {
-      return;
-    }
-
-    if (this.phase !== phases.normal && this.phase !== phases.action) {
-      return;
+      if (this.phase !== phases.normal && this.phase !== phases.action) {
+        return;
+      }
     }
 
     const origin = new Vector();
@@ -430,7 +445,7 @@ export default class GameManager {
       const spot = this.spawnpoints[(i + offset) % this.spawnpoints.length].copy();
 
       // works better than traceline: Octree lookup (FindInRadius)
-      const nearbyEntities = this.engine.FindInRadius(spot, 64.0, (edict) => edict.entity?.solid !== solid.SOLID_NOT);
+      const nearbyEntities = this.engine.FindInRadius(spot, 96.0, (edict) => edict.entity?.solid !== solid.SOLID_NOT);
 
       if (nearbyEntities.length > 0) {
         continue;
@@ -677,7 +692,11 @@ export default class GameManager {
           this.startVictoryPhase();
           return;
         }
-        // TODO: bossfight, basically spawn monsters with no limit and wait for the boss to die, then transition to victory phase after a delay
+
+        // as long as we are in the bossfight phase, we can spawn additional enemies to keep the players on their toes
+        if (this.canHaveBossfight) {
+          this.spawnEnemies();
+        }
         break;
 
       case phases.waiting:
@@ -744,6 +763,9 @@ export default class GameManager {
 
       spawnMarker.use(userEntity);
     }
+
+    // delay the spawning of more enemies
+    this.spawn_next = this.game.time + 15.0;
   }
 
   protected bringInNextRoundPlayers(): void {
@@ -892,6 +914,9 @@ export default class GameManager {
 
     // Prepare the boss victory conditions for the current map
     this.#initBossVictoryConditions();
+
+    // Configure settings that should not be changed midgame
+    this.#configureGameSettings();
   }
 
   protected resetGame(): void {
