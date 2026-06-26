@@ -271,7 +271,7 @@ export default class GameManager {
     });
   }
 
-  #configureGameSettings(): void {
+  configure(): void {
     this.round_number_limit = Math.max(1, Math.min(12, this.game.rounds));
   }
 
@@ -916,7 +916,7 @@ export default class GameManager {
     this.#initBossVictoryConditions();
 
     // Configure settings that should not be changed midgame
-    this.#configureGameSettings();
+    this.configure();
   }
 
   protected resetGame(): void {

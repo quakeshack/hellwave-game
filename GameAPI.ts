@@ -171,6 +171,9 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
   override init(mapname: string, serverflags: number): void {
     super.init(mapname, serverflags);
 
+    // Configure round limit and other map-start settings before events fire.
+    this.manager.configure();
+
     // Make sure the round manager is subscribed after a map start or changelevel.
     this.manager.subscribeToEvents();
   }
