@@ -23,6 +23,7 @@ import HellwavePlayer from './entity/Player.ts';
 import { BuyZoneEntity } from './entity/Zones.ts';
 import { phases, type HellwavePhase } from './Phases.ts';
 import { HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
+import { HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
 
 interface MonsterSpawnChoice {
   readonly classname: string;
@@ -215,9 +216,9 @@ export default class GameManager {
       }
     }
 
-    const zone = zones[Math.floor(Math.random() * zones.length)] ?? null;
+    const zone = zones[Math.floor(Math.random() * zones.length)];
 
-    if (zone !== null) {
+    if (zone !== undefined) {
       zone.openShop();
       this.designed_buyzone = zone;
     }
@@ -258,7 +259,7 @@ export default class GameManager {
     this.engine.eventBus.subscribe('game.monster.killed', (monster: BaseMonster, attacker: BaseEntity): void => {
       if (attacker instanceof HellwavePlayer) {
         attacker.updateMoney(100);
-        attacker.frags += 1;
+        attacker.frags++;
 
         this.dropGoodie(monster, attacker);
       }
@@ -445,7 +446,14 @@ export default class GameManager {
       const spot = this.spawnpoints[(i + offset) % this.spawnpoints.length].copy();
 
       // works better than traceline: Octree lookup (FindInRadius)
-      const nearbyEntities = this.engine.FindInRadius(spot, 96.0, (edict) => edict.entity?.solid !== solid.SOLID_NOT);
+      const nearbyEntities = this.engine.FindInRadius(spot, 96.0, ({ entity }) => {
+        // CR: never spawn in place of a zombie, they might be in their standing up phase
+        if ((entity instanceof HellwaveZombieMonsterEntity) && entity.actualHealth > 0) {
+          return true;
+        }
+
+        return entity?.solid !== solid.SOLID_NOT;
+      });
 
       if (nearbyEntities.length > 0) {
         continue;
