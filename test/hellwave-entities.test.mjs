@@ -5,6 +5,7 @@ import Vector from '../../../shared/Vector.ts';
 
 await import('../../id1/GameAPI.ts');
 
+const { default: BaseEntity } = await import('../../id1/entity/BaseEntity.ts');
 const { hull, moveType, solid } = await import('../Defs.ts');
 const { ServerGameAPI } = await import('../GameAPI.ts');
 const { HellwaveDogMonsterEntity } = await import('../entity/Monsters.ts');
@@ -102,12 +103,13 @@ void describe('HellwaveSuperspike', () => {
   });
 
   void test('captures a normalized direction after spawn', () => {
-    const spike = new HellwaveSuperspike(null, createMockGameAPI()).initializeEntity();
+    const gameAPI = createMockGameAPI();
+    const spike = new HellwaveSuperspike(null, gameAPI).initializeEntity();
 
-    spike.owner = {
-      movedir: new Vector(0, 3, 4),
-      origin: new Vector(1, 2, 3),
-    };
+    const owner = new BaseEntity({ isFree: () => false }, gameAPI).initializeEntity();
+    owner.movedir = new Vector(0, 3, 4);
+    owner.origin = new Vector(1, 2, 3);
+    spike.owner = owner;
     spike.setOrigin = function setOrigin(origin) {
       this.origin.set(origin);
     };
