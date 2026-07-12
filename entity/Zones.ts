@@ -212,22 +212,13 @@ export class BuyZoneShuttersEntity extends WallEntity {
   }
 }
 
-/**
- * QUAKED func_spawnzone_monsters (0.5 0 0.5) ?
- * Spawn area. Monsters will be spawned inside this area.
- */
-@serializableObject
-export class MonstersSpawnZoneEntity extends BaseEntity {
-  static classname = 'func_spawnzone_monsters';
-
-  override spawn(): void {
-    console.assert(this.model !== null, 'Monster spawn zones require a model');
-    if (this.model === null) {
-      return;
-    }
-
-    this.setModel(this.model);
-
+class BaseSpawnZoneEntity extends BaseEntity {
+  /**
+   * Samples spawnpoints within the bounding box of this entity.
+   * @param out optional output array
+   * @returns list of points
+   */
+  protected _sampleSpawnpoints(out = [] as Vector[]): Vector[] {
     const game = this.game as ServerGameAPI;
 
     for (let x = this.mins[0] + 40.0; x <= this.maxs[0]; x += 80.0) {
@@ -238,9 +229,48 @@ export class MonstersSpawnZoneEntity extends BaseEntity {
           this.engine.SpawnEntity(DebugMarkerEntity.classname, { origin });
         }
 
-        game.manager.spawnpoints.push(origin);
+        out.push(origin);
       }
     }
+
+    return out;
+  }
+}
+
+/**
+ * QUAKED func_spawnzone_monsters (0.5 0 0.5) ? INACTIVE
+ * Spawn area. Monsters will be spawned inside this area.
+ *
+ * Spawnflags:
+ * INACTIVE - do not contribute to the spawn point list until activated (use)
+ */
+@serializableObject
+export class MonstersSpawnZoneEntity extends BaseSpawnZoneEntity {
+  static classname = 'func_spawnzone_monsters';
+
+  static SPAWNFLAG_INACTIVE = 1;
+
+  @serializable actualModel: string | null = null;
+
+  override spawn(): void {
+    console.assert(this.model !== null, 'Monster spawn zones require a model');
+    if (this.model === null) {
+      return;
+    }
+
+    this.actualModel = this.model;
+
+    if ((this.spawnflags & MonstersSpawnZoneEntity.SPAWNFLAG_INACTIVE) === 0) {
+      this.use(this);
+    } else {
+      this.setModel(null);
+    }
+  }
+
+  use(_usedByEntity: BaseEntity): void {
+    this.setModel(this.actualModel);
+
+    this._sampleSpawnpoints((this.game as ServerGameAPI).manager.spawnpoints);
 
     this.remove();
   }
@@ -251,7 +281,7 @@ export class MonstersSpawnZoneEntity extends BaseEntity {
  * Spawn area. Players will be teleported inside this area when they get kicked out of the buyzone.
  */
 @serializableObject
-export class PlayersSpawnZoneEntity extends BaseEntity {
+export class PlayersSpawnZoneEntity extends BaseSpawnZoneEntity {
   static classname = 'func_spawnzone_players';
 
   @serializable spawnpoints: Vector[] = [];
@@ -264,19 +294,7 @@ export class PlayersSpawnZoneEntity extends BaseEntity {
 
     this.setModel(this.model);
 
-    const game = this.game as ServerGameAPI;
-
-    for (let x = this.mins[0] + 40.0; x <= this.maxs[0]; x += 80.0) {
-      for (let y = this.mins[1] + 40.0; y <= this.maxs[1]; y += 80.0) {
-        const origin = new Vector(x, y, this.mins[2] + 24.0);
-
-        if (game.debug_spawnpoints) {
-          this.engine.SpawnEntity(DebugMarkerEntity.classname, { origin });
-        }
-
-        this.spawnpoints.push(origin);
-      }
-    }
+    this._sampleSpawnpoints(this.spawnpoints);
 
     console.assert(this.spawnpoints.length >= this.engine.maxplayers, 'have at least maxplayers spawnpoints');
     this.unsetModel(false);
