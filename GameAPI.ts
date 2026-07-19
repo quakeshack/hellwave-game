@@ -1,4 +1,4 @@
-import type { Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
+import type { CommonEngineAPI, Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
 
 import { cvarFlags } from '../../shared/Defs.ts';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
@@ -189,7 +189,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
     return [
       {
         label: 'Castle of the Damned',
-        callback(engineAPI: ServerEngineAPI): void {
+        callback(engineAPI: CommonEngineAPI): void {
           engineAPI.AppendConsoleText(`
           hostname "Hellwave: Castle of the Damned"
           deathmatch 0
@@ -202,7 +202,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
       },
       {
         label: 'Doomed Computer Station',
-        callback(engineAPI: ServerEngineAPI): void {
+        callback(engineAPI: CommonEngineAPI): void {
           engineAPI.AppendConsoleText(`
           hostname "Hellwave: Doomed Computer Station"
           deathmatch 0

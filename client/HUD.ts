@@ -1,5 +1,5 @@
 import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
-import type { ClientEdict, PostProcessStack } from '../../../shared/GameInterfaces.ts';
+import type { ClientEdict, MenuItem, MenuPage, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
@@ -60,6 +60,9 @@ export default class HellwaveHUD extends Q1HUD {
     /** Current account balance [new balance, old balance, timestamp]. */
     money: [null, null, -Infinity],
   };
+
+  #buyMenuPage: MenuPage | null = null;
+  #buyMenuLabels: Map<number, MenuItem> = new Map();
 
   protected override _newStats(): HellwaveStatsInfo {
     return new HellwaveStatsInfo(this.engine);
@@ -192,6 +195,36 @@ export default class HellwaveHUD extends Q1HUD {
     return score.isActive && score.name !== '' ? score.name : null;
   }
 
+  /**
+   * Build the buy-menu item list once, using the engine's menu widgets instead of hand-rolled
+   * draw calls. Rows are toggled visible/hidden and relabeled every frame in #drawBuyMenu.
+   * @returns The (memoized) buy-menu page.
+   */
+  #getBuyMenuPage(): MenuPage {
+    if (this.#buyMenuPage) {
+      return this.#buyMenuPage;
+    }
+
+    const { Label, MenuPage, VerticalLayout } = this.engine.Menu;
+
+    const items: MenuItem[] = [
+      new Label({ label: 'Available for purchase:' }),
+    ];
+
+    for (const impulse of Object.keys(buyMenuItems)) {
+      const label = new Label({ label: '', visible: false });
+      this.#buyMenuLabels.set(Number(impulse), label);
+      items.push(label);
+    }
+
+    this.#buyMenuPage = new MenuPage({
+      layout: new VerticalLayout({ startY: 40, spacing: 4, labelX: 40, showCursor: false }),
+      items,
+    });
+
+    return this.#buyMenuPage;
+  }
+
   #drawBuyMenu(): void {
     if (this.game.clientdata.buyzone === 0) {
       return;
@@ -205,23 +238,16 @@ export default class HellwaveHUD extends Q1HUD {
       return;
     }
 
-    const startY = -48 - 16 * 16;
+    const page = this.#getBuyMenuPage();
     const currentMoney = this.inventory.money[0] ?? 0;
 
-    this.sbar.drawString(0, startY, 'Available for purchase:', 2.0);
-
     for (const [impulse, item] of Object.entries(buyMenuItems)) {
-      if (item.cost > currentMoney) {
-        continue;
-      }
-
-      this.sbar.drawString(
-        0,
-        startY + 24 + 16 * Number(impulse),
-        `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`,
-        2.0,
-      );
+      const label = this.#buyMenuLabels.get(Number(impulse))!;
+      label.visible = item.cost <= currentMoney;
+      label.label = `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`;
     }
+
+    page.draw();
   }
 
   #drawAccountBalance(): void {

@@ -134,6 +134,52 @@ void describe('Hellwave HUD', () => {
     assert.equal(postProcessSetStacks.length, 1);
     assert.deepEqual(hud.inventory.money, [400, null, 0]);
   });
+
+  void test('draws the buy menu across multiple frames without crashing on the first frame', () => {
+    // Regression test: the buy-menu labels used to be populated lazily inside the same
+    // method that first reads them, so the very first draw call crashed reading `.visible`
+    // off an unpopulated Map entry.
+    class FakeMenuItem {
+      constructor({ label = '', visible = true } = {}) {
+        this.label = label;
+        this.visible = visible;
+      }
+    }
+
+    class FakeMenuPage {
+      constructor({ items = [] } = {}) {
+        this.items = items;
+        this.drawCount = 0;
+      }
+
+      draw() {
+        this.drawCount += 1;
+      }
+    }
+
+    const engine = createMockClientEngine();
+    engine.Menu = {
+      Label: FakeMenuItem,
+      MenuPage: FakeMenuPage,
+      VerticalLayout: class {},
+    };
+
+    try {
+      HellwaveHUD.Init(engine);
+      const game = createHellwaveGame(engine, {
+        clientdata: createClientdata({ buyzone: 2, money: 150 }),
+      });
+      const hud = new HellwaveHUD(game, engine);
+
+      hud.init();
+      hud.inventory.money = [150, null, 0];
+
+      assert.doesNotThrow(() => hud.draw());
+      assert.doesNotThrow(() => hud.draw());
+    } finally {
+      HellwaveHUD.Shutdown(engine);
+    }
+  });
 });
 
 void describe('Hellwave client API', () => {
