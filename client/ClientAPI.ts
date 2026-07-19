@@ -11,7 +11,7 @@ import HellwaveHUD from './HUD.ts';
 
 interface HellwaveClientdata extends Id1Clientdata {
   money: number;
-  buyzone: -1 | 0 | 1 | 2;
+  buyzone: -1 | 0 | 1;
   spectating: boolean;
 }
 
