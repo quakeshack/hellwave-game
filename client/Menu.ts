@@ -142,6 +142,11 @@ export default class HellwaveMenu {
     const settingsActions = HellwaveMenu.#buildNewGameSettingsPage(engineAPI);
     const sidebarActions = HellwaveMenu.#buildMainPage(engineAPI);
 
+    // Id1Menu.Init is called with `classicFrontend: false` for hellwave (see
+    // plans/hellwave-menu-asset-cleanup.md), so it no longer sets the root page itself --
+    // hellwave owns 'main' now and must claim the root explicitly.
+    engineAPI.Menu.SetRootPage('main');
+
     engineAPI.LoadBitmapFont('gfx/header-font.png', {
       charset: HEADER_FONT_CHARSET,
       glyphWidth: HEADER_FONT_GLYPH_WIDTH,

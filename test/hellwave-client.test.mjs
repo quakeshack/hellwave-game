@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 
 import { K } from '../../../shared/Keys.ts';
 import Vector from '../../../shared/Vector.ts';
-import { createMockClientEngine, createMockMenuAPI, createMockSound } from '../../id1/test/client/fixtures.ts';
+import { captureRegisteredPages, createMockClientEngine, createMockMenuAPI, createMockSound } from '../../id1/test/client/fixtures.ts';
 
 await import('../../id1/GameAPI.ts');
 
@@ -613,10 +613,20 @@ void describe('Hellwave client API', () => {
     assert.equal(engine.GetCvar('_cl_name').string, 'ReturningPlayer');
   });
 
-  void test('registers the hellwave main menu page alongside the inherited id1 pages', () => {
+  void test('registers the hellwave main menu page alongside the shared id1 utility pages, not the classic front end', () => {
     const engine = createMockClientEngine();
+    const pages = captureRegisteredPages(engine);
 
     ClientGameAPI.Init(engine);
+
+    // Regression test: Id1ClientGameAPI.Init used to unconditionally build id1's whole classic
+    // single-player front end (main/singleplayer/load/save/multiplayer/launch_server/help) and
+    // load its pics, even though hellwave replaces 'main' and never navigates to the rest. See
+    // plans/hellwave-menu-asset-cleanup.md.
+    assert.deepEqual(
+      [...pages.keys()].sort(),
+      ['alert', 'hellwave_newgame', 'hellwave_newgame_settings', 'hellwave_profile', 'keys', 'main', 'options', 'quit'],
+    );
 
     engine.Menu.Push('main');
     assert.equal(engine.Menu.IsOpen('main'), true);
@@ -624,6 +634,21 @@ void describe('Hellwave client API', () => {
     // 'main' starts a session-list poll interval on activate (onEnter) -- pop it so that
     // interval is cleared (onExit) instead of leaking past this test.
     engine.Menu.Pop();
+  });
+
+  void test('sets \'main\' as the root page itself, since Id1Menu no longer does it for classicFrontend: false', () => {
+    const engine = createMockClientEngine();
+    let rootPageName = null;
+    engine.Menu.SetRootPage = (name) => { rootPageName = name; };
+
+    // Regression test: HellwaveMenu relied on Id1Menu.Init's unconditional Menu.SetRootPage('main')
+    // call as a side effect (root resolves lazily by name, so re-registering 'main' afterwards
+    // still worked). Once Id1Menu.Init started skipping that call for classicFrontend: false,
+    // nothing set the root page at all, and the real engine's MenuStack.pushRoot() asserted on
+    // startup. See plans/hellwave-menu-asset-cleanup.md.
+    ClientGameAPI.Init(engine);
+
+    assert.equal(rootPageName, 'main');
   });
 
   void test('reaches HellwaveHUD.Init through the game-module Init chain, not just the inherited Q1HUD.Init', async () => {

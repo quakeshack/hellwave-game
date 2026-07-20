@@ -4,6 +4,7 @@ import sampleBSpline from '../../../shared/BSpline.ts';
 import type Vector from '../../../shared/Vector.ts';
 
 import { ClientGameAPI as Id1ClientGameAPI, type Id1Clientdata } from '../../id1/client/ClientAPI.ts';
+import type { Id1MenuOptions } from '../../id1/client/Menu.ts';
 import { clientEvent, clientEventName } from '../Defs.ts';
 import { ServerGameAPI } from '../GameAPI.ts';
 
@@ -104,6 +105,13 @@ export class ClientGameAPI extends Id1ClientGameAPI {
 
   protected static override _getHUDClass(): typeof HellwaveHUD {
     return HellwaveHUD;
+  }
+
+  // Hellwave's HellwaveMenu.Init (called below in Init) fully replaces id1's classic front end
+  // with its own main/profile/map-picker pages -- only the shared options/keys/quit/alert pages
+  // (still built regardless) are ever reused. See plans/hellwave-menu-asset-cleanup.md.
+  protected static override _getMenuInitOptions(): Id1MenuOptions {
+    return { classicFrontend: false };
   }
 
   protected override _updateViewModel(): void {
