@@ -793,7 +793,7 @@ void describe('Hellwave profile page', () => {
     getMainPage().items[1].action();
     const page = getProfilePage();
 
-    assert.equal(page.items.at(-1).label, 'Accept Changes');
+    assert.equal(page.items.at(-1).label, 'Accept');
 
     page.items.at(-1).action();
 
@@ -848,6 +848,36 @@ void describe('Hellwave profile page', () => {
     assert.equal(calls.pop, 1);
     assert.deepEqual(engine.appendedConsoleText, []);
     assert.equal(engine.GetCvar('hw_profile_confirmed').string, '0');
+  });
+
+  void test('attaches the header bitmap font to the Accept/Continue button once it finishes loading', async () => {
+    const { getMainPage, getProfilePage } = createMainMenuRig();
+
+    getMainPage().items[1].action();
+    const page = getProfilePage();
+
+    assert.equal(page.items.at(-1).font, null);
+
+    await Promise.resolve(); // flush LoadBitmapFont's promise
+
+    assert.equal(page.items.at(-1).font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+  });
+
+  void test('layout.hitTest resolves the Name/Vest/Pants fields and the bottom-right Accept button', async () => {
+    const { getMainPage, getProfilePage } = createMainMenuRig();
+
+    getMainPage().items[1].action(); // standalone, "Accept" label
+    const page = getProfilePage();
+
+    await Promise.resolve(); // flush LoadBitmapFont's promise, so Accept is measured with the real font
+
+    assert.equal(page.layout.hitTest(page.items, 100, 48), 0); // Name field row (startY=48)
+    assert.equal(page.layout.hitTest(page.items, 100, 72), 1); // Vest field row
+    assert.equal(page.layout.hitTest(page.items, 100, 96), 2); // Pants field row
+    // "Accept" is 6 chars * 14px (mock cellWidth) = 84px wide, right edge x=304.
+    assert.equal(page.layout.hitTest(page.items, 260, 220), 3); // Accept, bottom-right corner
+    assert.equal(page.layout.hitTest(page.items, 50, 220), null); // left of Accept's column
+    assert.equal(page.layout.hitTest(page.items, 260, 160), null); // above Accept's row
   });
 });
 

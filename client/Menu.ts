@@ -21,7 +21,7 @@ const ROW_SPACING = 24;
 const CURSOR_MARKER = '>';
 
 const PROFILE_CONFIRMED_CVAR = 'hw_profile_confirmed';
-const DEFAULT_PROFILE_ACCEPT_LABEL = 'Accept Changes';
+const DEFAULT_PROFILE_ACCEPT_LABEL = 'Accept';
 
 // Target on-screen width (virtual menu-space units) for the hi-res logo -- it's a real PNG
 // (896x119), not a low-res LMP where "native size" already maps to a sane virtual footprint, so
@@ -57,12 +57,14 @@ const SETTINGS_PREVIEW_X = 20;
 const SETTINGS_PREVIEW_Y = 40;
 const SETTINGS_PREVIEW_WIDTH = 80;
 const SETTINGS_FIELDS_LABEL_X = 160;
-// Start button: styled like the main menu's sidebar items (see #buildNewGameSettingsPage),
-// bottom-right rather than stacked with the Rounds/Private Game fields -- mirrors the
-// page-agnostic Back button's bottom-left corner (see M's #backButtonX/#backButtonY), with the
-// same 16px margin from the right edge the sidebar/logo use on the left (see SIDEBAR_X).
-const START_BUTTON_RIGHT_X = 304;
-const START_BUTTON_Y = 216;
+// Shared bottom-right corner for a page's single primary call-to-action button (New Game
+// settings' "Start!", the profile page's "Continue"/"Accept") -- styled like the main
+// menu's sidebar items (header font, hover-color focus feedback) and pinned to the bottom-right
+// rather than stacked in with the rest of the page's fields, mirroring the page-agnostic Back
+// button's bottom-left corner (see M's #backButtonX/#backButtonY), with the same 16px margin
+// from the right edge the sidebar/logo use on the left (see SIDEBAR_X).
+const BOTTOM_RIGHT_BUTTON_X = 304;
+const BOTTOM_RIGHT_BUTTON_Y = 216;
 
 // Sidebar main-menu items ("New Game"/"Profile"/"Configure"/"Quit") are drawn with LibreQuake's
 // stylized header font instead of the standard conchars font -- see #buildMainPage. The atlas is
@@ -78,9 +80,20 @@ const HEADER_FONT_CELL_HEIGHT = 18;
 let bigboxPic: MenuPic = null!;
 let menuplyrPic: MenuPic = null!;
 let hiResLogoPic: GLTexture | null = null;
-// Cached so #buildNewGameSettingsPage's customDraw can measure the Start button's label width for
-// centering -- read live at draw time since the font finishes loading after page construction.
+// Cached so #buildNewGameSettingsPage's/#buildProfilePage's customDraw can measure their
+// bottom-right button's label width for right-alignment -- read live at draw time since the font
+// finishes loading after page construction.
 let menuFont: BitmapFont | null = null;
+
+/**
+ * The shape `MenuPage.layout` expects (draw/hit-test against a page's `items`) -- declared
+ * locally rather than imported from the engine's `MenuPage.ts`, since game code only depends on
+ * `ClientEngineAPI`/`GameInterfaces.ts`, never engine internals directly.
+ */
+interface RowLayout {
+  draw(items: MenuItem[], focusedIndex: number): void;
+  hitTest(items: MenuItem[], px: number, py: number): number | null;
+}
 
 /**
  * hellwave's own main menu, replacing id1's inherited image-based page (see
@@ -137,7 +150,7 @@ export default class HellwaveMenu {
       'Whether the player has confirmed their hellwave profile (name/colors) at least once.',
     );
 
-    HellwaveMenu.#buildProfilePage(engineAPI);
+    const profileActions = HellwaveMenu.#buildProfilePage(engineAPI);
     HellwaveMenu.#buildNewGamePage(engineAPI);
     const settingsActions = HellwaveMenu.#buildNewGameSettingsPage(engineAPI);
     const sidebarActions = HellwaveMenu.#buildMainPage(engineAPI);
@@ -156,7 +169,7 @@ export default class HellwaveMenu {
       variants: 2,
     }).then((font) => {
       menuFont = font;
-      for (const action of [...sidebarActions, ...settingsActions]) {
+      for (const action of [...sidebarActions, ...settingsActions, ...profileActions]) {
         action.font = font;
       }
     }).catch(() => {
@@ -170,7 +183,7 @@ export default class HellwaveMenu {
 
   /**
    * Open the profile page, either as a plain standalone destination (defaults: pop back on
-   * accept, "Accept Changes" label) or as a gate in front of another action.
+   * accept, "Accept" label) or as a gate in front of another action.
    */
   static #openProfile(engineAPI: ClientEngineAPI, options: { onAccept?: () => void; label?: string } = {}): void {
     HellwaveMenu.#profileOnAccept = options.onAccept ?? (() => { engineAPI.Menu.Pop(); });
@@ -225,6 +238,47 @@ export default class HellwaveMenu {
   }
 
   /**
+   * Build a `RowLayout` for pages shaped like "a stock `VerticalLayout` of `fieldCount` fields,
+   * followed by one primary call-to-action button pinned to the shared bottom-right corner"
+   * (`BOTTOM_RIGHT_BUTTON_X`/`_Y`) -- used by both the New Game settings page (Rounds/Private
+   * Game + Start) and the profile page (Name/Vest/Pants + Continue/Accept). The button is
+   * measured with `menuFont` (once loaded) so it can be right-aligned against its own label width,
+   * matching the sidebar's header-font styling.
+   * @returns A layout usable directly as `MenuPage`'s `layout`.
+   */
+  static #buildTrailingActionLayout(fieldsLayout: RowLayout, fieldCount: number): RowLayout {
+    return {
+      draw(rowItems: MenuItem[], focusedIndex: number): void {
+        fieldsLayout.draw(rowItems.slice(0, fieldCount), focusedIndex);
+
+        const button = rowItems[fieldCount];
+        const buttonWidth = menuFont?.measure(button.label) ?? button.label.length * 8;
+        const buttonX = BOTTOM_RIGHT_BUTTON_X - buttonWidth;
+        button.draw(buttonX, BOTTOM_RIGHT_BUTTON_Y, focusedIndex === fieldCount);
+      },
+      hitTest(rowItems: MenuItem[], px: number, py: number): number | null {
+        const fieldsHit = fieldsLayout.hitTest(rowItems.slice(0, fieldCount), px, py);
+        if (fieldsHit !== null) {
+          return fieldsHit;
+        }
+
+        const button = rowItems[fieldCount];
+        const buttonWidth = menuFont?.measure(button.label) ?? button.label.length * 8;
+        const buttonX = BOTTOM_RIGHT_BUTTON_X - buttonWidth;
+
+        if (
+          button.focusable && px >= buttonX && px < buttonX + buttonWidth
+          && py >= BOTTOM_RIGHT_BUTTON_Y && py < BOTTOM_RIGHT_BUTTON_Y + button.getHeight()
+        ) {
+          return fieldCount;
+        }
+
+        return null;
+      },
+    };
+  }
+
+  /**
    * Virtual menu-space position for the row at `index` in the combined `page.items` array.
    * @returns The row's top-left position.
    */
@@ -235,7 +289,10 @@ export default class HellwaveMenu {
     return { x: isSidebar ? SIDEBAR_X : SESSIONS_X, y: ROWS_START_Y + rowIndex * ROW_SPACING };
   }
 
-  static #buildProfilePage(engineAPI: ClientEngineAPI): void {
+  /**
+   * @returns `[acceptAction]`, so `Init()` can attach the header font once it finishes loading.
+   */
+  static #buildProfilePage(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, ColorPicker, MenuPage: MenuPageClass, Textbox, VerticalLayout } = Menu;
 
@@ -269,10 +326,17 @@ export default class HellwaveMenu {
       },
     });
 
-    const acceptAction = new Action({ label: DEFAULT_PROFILE_ACCEPT_LABEL });
+    const acceptAction = new Action({ label: DEFAULT_PROFILE_ACCEPT_LABEL, heightOverride: HEADER_FONT_GLYPH_HEIGHT });
+
+    // Name/Vest/Pants keep the stock field layout (reused directly, sliced to just those three
+    // items); Accept/Continue is styled and positioned like the New Game settings page's Start
+    // button -- same shared bottom-right corner -- instead of stacking as a fourth field. See
+    // #buildTrailingActionLayout.
+    const fieldsLayout = new VerticalLayout({ startY: 48, spacing: 0, labelX: 64, cursorX: 56 });
+    const profileLayout = HellwaveMenu.#buildTrailingActionLayout(fieldsLayout, 3);
 
     const profilePage = new MenuPageClass({
-      layout: new VerticalLayout({ startY: 48, spacing: 0, labelX: 64, cursorX: 56 }),
+      layout: profileLayout,
       items: [
         nameTextbox,
         new ColorPicker({ label: 'Vest', heightOverride: 24, getValue: () => top, setValue: (value) => { top = value; } }),
@@ -315,6 +379,8 @@ export default class HellwaveMenu {
     };
 
     Menu.RegisterPage('hellwave_profile', profilePage);
+
+    return [acceptAction];
   }
 
   /**
@@ -501,35 +567,9 @@ export default class HellwaveMenu {
 
     // Rounds/Private Game keep the stock two-column field layout (reused directly, sliced to just
     // those two items); Start is measured (once the header font has loaded) and right-aligned
-    // separately below instead of being a third stacked field.
+    // separately below instead of being a third stacked field -- see #buildTrailingActionLayout.
     const fieldsLayout = new VerticalLayout({ startY: 100, spacing: 8, labelX: SETTINGS_FIELDS_LABEL_X, cursorX: SETTINGS_FIELDS_LABEL_X - 12 });
-
-    const settingsLayout = {
-      draw(rowItems: MenuItem[], focusedIndex: number): void {
-        fieldsLayout.draw(rowItems.slice(0, 2), focusedIndex);
-
-        const start = rowItems[2];
-        const startWidth = menuFont?.measure(start.label) ?? start.label.length * 8;
-        const startX = START_BUTTON_RIGHT_X - startWidth;
-        start.draw(startX, START_BUTTON_Y, focusedIndex === 2);
-      },
-      hitTest(rowItems: MenuItem[], px: number, py: number): number | null {
-        const fieldsHit = fieldsLayout.hitTest(rowItems.slice(0, 2), px, py);
-        if (fieldsHit !== null) {
-          return fieldsHit;
-        }
-
-        const start = rowItems[2];
-        const startWidth = menuFont?.measure(start.label) ?? start.label.length * 8;
-        const startX = START_BUTTON_RIGHT_X - startWidth;
-
-        if (start.focusable && px >= startX && px < startX + startWidth && py >= START_BUTTON_Y && py < START_BUTTON_Y + start.getHeight()) {
-          return 2;
-        }
-
-        return null;
-      },
-    };
+    const settingsLayout = HellwaveMenu.#buildTrailingActionLayout(fieldsLayout, 2);
 
     const settingsPage = new MenuPageClass({
       title: 'New Game',
