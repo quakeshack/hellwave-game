@@ -102,6 +102,10 @@ export class ClientGameAPI extends Id1ClientGameAPI {
     return new HellwaveHUD(this, this.engine);
   }
 
+  protected static override _getHUDClass(): typeof HellwaveHUD {
+    return HellwaveHUD;
+  }
+
   protected override _updateViewModel(): void {
     if (this.clientdata.spectating) {
       this.viewmodel.visible = false;

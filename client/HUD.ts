@@ -1,5 +1,5 @@
 import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
-import type { ClientEdict, MenuItem, MenuPage, PostProcessStack } from '../../../shared/GameInterfaces.ts';
+import type { ClientEdict, ClientEngineAPI, MenuItem, MenuPage, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import { K } from '../../../shared/Keys.ts';
 import Q from '../../../shared/Q.ts';
@@ -73,6 +73,25 @@ export default class HellwaveHUD extends Q1HUD {
   #buyFeedbackLabel: MenuItem | null = null;
   #buyFeedbackExpiry = -Infinity;
 
+  // Whichever instance is currently live -- a fresh `HellwaveHUD` is constructed on every map
+  // load (see `ClientGameAPI`), but the `hw_buymenu` command is only ever registered once (see
+  // `Init`), so its handler needs a way to reach the live instance's clientdata.
+  static #activeHUD: HellwaveHUD | null = null;
+
+  override init(): void {
+    super.init();
+
+    HellwaveHUD.#activeHUD = this;
+  }
+
+  override shutdown(): void {
+    super.shutdown();
+
+    if (HellwaveHUD.#activeHUD === this) {
+      HellwaveHUD.#activeHUD = null;
+    }
+  }
+
   protected override _newStats(): HellwaveStatsInfo {
     return new HellwaveStatsInfo(this.engine);
   }
@@ -86,18 +105,12 @@ export default class HellwaveHUD extends Q1HUD {
 
     this.#registerBuyMenu();
 
-    // Opening/closing the buy menu is purely client-side UI state (see #registerBuyMenu) -- the
-    // server only tells us whether the player is physically in a buyzone. The only thing this
-    // needs to react to is an *involuntary* close: leaving the zone, or the round moving on,
-    // while the menu happens to be showing.
-    this.engine.RegisterCommand('hw_buymenu', (): void => {
-      if (this.game.clientdata.buyzone === 1 && !this.engine.Menu.IsOpen('hellwave_buy')) {
-        this.engine.Menu.Open('hellwave_buy');
-      }
-    });
-
     this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: number | string | boolean | null): void => {
       switch (field) {
+        // Opening the buy menu is handled by the `hw_buymenu` command (see `Init`) -- the server
+        // only tells us whether the player is physically in a buyzone. The only thing this needs
+        // to react to is an *involuntary* close: leaving the zone, or the round moving on, while
+        // the menu happens to be showing.
         case 'buyzone': {
           console.assert(typeof value === 'number' && value >= -1 && value <= 1);
           const buyzone = value as -1 | 0 | 1;
@@ -253,7 +266,7 @@ export default class HellwaveHUD extends Q1HUD {
    * Register the buy menu as a real page on the menu stack -- instead of a manually drawn
    * overlay -- so it gets mouse click/hover, cursor handling, and Escape/Back navigation for
    * free from the same pipeline the main menu already uses. Opened by the `hw_buymenu` client
-   * command (see `_subscribeToEvents`) whenever the server confirms we're in a buyzone; closed
+   * command (see `Init`) whenever the server confirms we're in a buyzone; closed
    * either by the player (Escape/Back, purely local) or reactively if the server later says
    * we've left the zone. The server has no notion of "menu open" at all -- purchases carry their
    * own dedicated impulse range (`toBuyImpulse`/`fromBuyImpulse` in Defs.ts) and are validated
@@ -408,5 +421,27 @@ export default class HellwaveHUD extends Q1HUD {
         this.engine.PostProcess.clearStack();
       }
     }
+  }
+
+  static override Init(engineAPI: ClientEngineAPI): void {
+    super.Init(engineAPI);
+
+    // Registered once here rather than per-instance -- a fresh `HellwaveHUD` is constructed on
+    // every map load (see `ClientGameAPI`), and `Cmd.AddCommand` asserts when a command name is
+    // already registered. `#activeHUD` (kept current by `init`/`shutdown`) lets this single,
+    // long-lived handler still read whichever instance is actually live.
+    engineAPI.RegisterCommand('hw_buymenu', (): void => {
+      const activeHUD = HellwaveHUD.#activeHUD;
+
+      if (activeHUD !== null && activeHUD.game.clientdata.buyzone === 1 && !engineAPI.Menu.IsOpen('hellwave_buy')) {
+        engineAPI.Menu.Open('hellwave_buy');
+      }
+    });
+  }
+
+  static override Shutdown(engineAPI: ClientEngineAPI): void {
+    super.Shutdown(engineAPI);
+
+    engineAPI.UnregisterCommand('hw_buymenu');
   }
 }

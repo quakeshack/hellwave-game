@@ -105,6 +105,9 @@ function createBuyMenuHud(clientdataOverrides = {}, engineOverrides = {}) {
   });
   const hud = new HellwaveHUD(game, engine);
 
+  // `hw_buymenu` is registered once by the static lifecycle hook (see HUD.ts `Init`), not by
+  // instance init -- needed here since the command handler reads the currently-active instance.
+  HellwaveHUD.Init(engine);
   hud.init();
 
   return {
@@ -277,6 +280,83 @@ void describe('Hellwave HUD', () => {
     assert.deepEqual(hud.inventory.money, [400, null, 0]);
   });
 
+  void describe('hw_buymenu command registration', () => {
+    void test('is not registered by per-instance init -- only by the static Init lifecycle hook', () => {
+      const engine = createMockClientEngine();
+      const game = createHellwaveGame(engine);
+
+      // Simulates two map loads sharing one client engine, since a fresh `HellwaveHUD` is
+      // constructed on every map load (see `ClientGameAPI`). Before this fix, `hw_buymenu` was
+      // registered from instance init, so the second `hud.init()` here would hit
+      // `Cmd.AddCommand`'s "already exists" assert.
+      new HellwaveHUD(game, engine).init();
+      new HellwaveHUD(game, engine).init();
+
+      assert.equal(engine.commands.has('hw_buymenu'), false);
+    });
+
+    void test('static Init registers it once; Shutdown unregisters it', () => {
+      const engine = createMockClientEngine();
+
+      HellwaveHUD.Init(engine);
+      assert.equal(engine.commands.has('hw_buymenu'), true);
+
+      HellwaveHUD.Shutdown(engine);
+      assert.equal(engine.commands.has('hw_buymenu'), false);
+    });
+
+    void test('the hw_buymenu handler is a no-op once its HUD instance has been shut down', () => {
+      const engine = createMockClientEngine();
+      const game = createHellwaveGame(engine, {
+        clientdata: createClientdata({ buyzone: 1 }),
+      });
+
+      HellwaveHUD.Init(engine);
+      const hud = new HellwaveHUD(game, engine);
+      hud.init();
+      hud.shutdown();
+
+      void engine.commands.get('hw_buymenu')();
+
+      assert.equal(engine.Menu.IsOpen('hellwave_buy'), false);
+
+      HellwaveHUD.Shutdown(engine);
+    });
+  });
+
+  void test('+showscores/-showscores (inherited from Q1HUD) still toggle the scoreboard on a HellwaveHUD instance', () => {
+    const engine = createMockClientEngine();
+
+    // Regression test: the `+showscores`/`-showscores` commands registered by `Q1HUD.Init`
+    // publish a `hud.showscores` event on the shared event bus rather than writing to a static
+    // class field, so any live HUD instance -- including a `HellwaveHUD` -- picks up the toggle
+    // through its own `hud.showscores` subscription.
+    HellwaveHUD.Init(engine);
+
+    try {
+      const game = createHellwaveGame(engine);
+      const hud = new HellwaveHUD(game, engine);
+
+      hud.init();
+
+      engine.drawPics.length = 0;
+      hud.draw();
+      assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), false);
+
+      void engine.commands.get('+showscores')();
+      engine.drawPics.length = 0;
+      hud.draw();
+      assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), true);
+
+      void engine.commands.get('-showscores')();
+      engine.drawPics.length = 0;
+      hud.draw();
+      assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), false);
+    } finally {
+      HellwaveHUD.Shutdown(engine);
+    }
+  });
+
   void describe('buy menu as a real menu page', () => {
     /**
      * Simulate pressing `b` -- triggers the `hw_buymenu` client command the HUD registers,
@@ -405,29 +485,23 @@ void describe('Hellwave HUD', () => {
     void test('shows purchase feedback and lets it expire after a few seconds', () => {
       const { engine, hud, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 0 });
 
-      HellwaveHUD.Init(engine);
+      pressBuyMenuKey(engine);
 
-      try {
-        pressBuyMenuKey(engine);
+      const feedbackLabel = getBuyMenuPage().items[2];
 
-        const feedbackLabel = getBuyMenuPage().items[2];
+      assert.equal(feedbackLabel.visible, false);
 
-        assert.equal(feedbackLabel.visible, false);
+      engine.eventBus.publish(clientEventName(clientEvent.BUY_MESSAGE), 'bought Heavy Armor!');
 
-        engine.eventBus.publish(clientEventName(clientEvent.BUY_MESSAGE), 'bought Heavy Armor!');
+      assert.equal(feedbackLabel.visible, true);
+      assert.equal(feedbackLabel.label, 'bought Heavy Armor!');
 
-        assert.equal(feedbackLabel.visible, true);
-        assert.equal(feedbackLabel.label, 'bought Heavy Armor!');
+      hud.draw(); // still within the expiry window
+      assert.equal(feedbackLabel.visible, true);
 
-        hud.draw(); // still within the expiry window
-        assert.equal(feedbackLabel.visible, true);
-
-        engine.CL.gametime += 10;
-        hud.draw();
-        assert.equal(feedbackLabel.visible, false);
-      } finally {
-        HellwaveHUD.Shutdown(engine);
-      }
+      engine.CL.gametime += 10;
+      hud.draw();
+      assert.equal(feedbackLabel.visible, false);
     });
 
     void test('customHandleInput routes 1-9 to their dedicated buy-impulse and falls back to default navigation otherwise', () => {
@@ -550,6 +624,21 @@ void describe('Hellwave client API', () => {
     // 'main' starts a session-list poll interval on activate (onEnter) -- pop it so that
     // interval is cleared (onExit) instead of leaking past this test.
     engine.Menu.Pop();
+  });
+
+  void test('reaches HellwaveHUD.Init through the game-module Init chain, not just the inherited Q1HUD.Init', async () => {
+    const engine = createMockClientEngine();
+
+    // Regression test: `ClientGameAPI.Init` (id1) used to call `Q1HUD.Init` directly, so a
+    // subclass's own static Init (registering `hw_buymenu`) never ran in production even though
+    // it worked fine when tests invoked `HellwaveHUD.Init` directly.
+    ClientGameAPI.Init(engine);
+    await Promise.resolve(); // flush the loading-screen load Init kicks off
+
+    assert.equal(engine.commands.has('hw_buymenu'), true);
+
+    ClientGameAPI.Shutdown(engine);
+    assert.equal(engine.commands.has('hw_buymenu'), false);
   });
 });
 
