@@ -650,12 +650,25 @@ void describe('Hellwave main menu', () => {
   // focus/hit-testing is exercised through `updateHover()`/`layout.hitTest()` directly instead of
   // arrow-key `handleInput()` calls -- neither of those touches sound.
 
-  void test('registers \'main\' with New Game, Profile, Configure, and Quit, all enabled', () => {
+  void test('registers \'main\' with New Game, Profile, Options, and Quit, all enabled', () => {
     const { getMainPage } = createMainMenuRig();
     const page = getMainPage();
 
-    assert.deepEqual(page.items.map((item) => item.label), ['New Game', 'Profile', 'Configure', 'Quit']);
+    assert.deepEqual(page.items.map((item) => item.label), ['New Game', 'Profile', 'Options', 'Quit']);
     assert.deepEqual(page.items.map((item) => item.enabled), [true, true, true, true]);
+  });
+
+  void test('attaches the header bitmap font to every sidebar item once it finishes loading', async () => {
+    const { getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    assert.deepEqual(page.items.map((item) => item.font), [null, null, null, null]);
+
+    await Promise.resolve(); // flush LoadBitmapFont's promise
+
+    for (const item of page.items) {
+      assert.equal(item.font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    }
   });
 
   void test('New Game opens the profile gate first when no profile has been confirmed yet', () => {
@@ -689,7 +702,7 @@ void describe('Hellwave main menu', () => {
     assert.deepEqual(calls.push, ['hellwave_profile', 'hellwave_newgame']);
   });
 
-  void test('Configure and Quit push the inherited id1 pages', () => {
+  void test('Options and Quit push the inherited id1 pages', () => {
     const { calls, getMainPage } = createMainMenuRig();
     const page = getMainPage();
 
@@ -703,16 +716,16 @@ void describe('Hellwave main menu', () => {
     const { getMainPage } = createMainMenuRig();
     const page = getMainPage();
 
-    // Row y-positions: New Game (y=56), Profile (y=72), Configure (y=88), Quit (y=104), each 16 tall.
+    // Row y-positions: New Game (y=56), Profile (y=80), Options (y=104), Quit (y=128), each 24 tall.
     // This is what actually fixes the "hover doesn't move the cursor on the main menu" bug -- the
     // previous implementation had no real `layout`/`items` for `updateHover()` to resolve against.
-    page.updateHover(30, 90);
-    assert.equal(page.cursor, 2); // Configure
+    page.updateHover(30, 110);
+    assert.equal(page.cursor, 2); // Options
 
-    page.updateHover(30, 72);
+    page.updateHover(30, 80);
     assert.equal(page.cursor, 1); // Profile
 
-    page.updateHover(30, 104);
+    page.updateHover(30, 128);
     assert.equal(page.cursor, 3); // Quit
   });
 
@@ -721,7 +734,7 @@ void describe('Hellwave main menu', () => {
     const page = getMainPage();
 
     assert.equal(page.layout.hitTest(page.items, 30, 56), 0); // New Game
-    assert.equal(page.layout.hitTest(page.items, 30, 104), 3); // Quit
+    assert.equal(page.layout.hitTest(page.items, 30, 128), 3); // Quit
     assert.equal(page.layout.hitTest(page.items, 200, 56), null); // session column, nothing there yet
     assert.equal(page.layout.hitTest(page.items, 30, 500), null); // below every row
   });
@@ -831,6 +844,25 @@ void describe('Hellwave new game map picker', () => {
     assert.equal(page.layout.hitTest(page.items, 200, 90), 1);
     assert.equal(page.layout.hitTest(page.items, 160, 90), null); // the gap
     assert.equal(page.layout.hitTest(page.items, 75, 500), null); // below every card
+  });
+
+  void test('draws a light-blue hover border around only the focused card', () => {
+    const { engine, getNewGamePage } = createMainMenuRig();
+    const page = getNewGamePage();
+    const hoverColor = new Vector(171 / 255, 231 / 255, 255 / 255);
+
+    engine.drawRects.length = 0;
+    page.layout.draw(page.items, 0);
+
+    assert.equal(engine.drawRects.length, 4); // one hollow border: top/bottom/left/right
+    for (const rect of engine.drawRects) {
+      assert.deepEqual(rect.color, hoverColor);
+    }
+
+    engine.drawRects.length = 0;
+    page.layout.draw(page.items, 1); // second card focused instead
+
+    assert.equal(engine.drawRects.length, 4); // still exactly one border, now around the other card
   });
 
   void test('long map labels wrap onto a second line instead of overflowing into the next card', () => {
@@ -955,6 +987,34 @@ void describe('Hellwave new game settings', () => {
     getNewGameSettingsPage().handleInput(K.ESCAPE);
 
     assert.equal(calls.pop, 1);
+  });
+
+  void test('attaches the header bitmap font to the Start button once it finishes loading', async () => {
+    const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+
+    getNewGamePage().items[0].action();
+    const page = getNewGameSettingsPage();
+
+    assert.equal(page.items.at(-1).font, null);
+
+    await Promise.resolve(); // flush LoadBitmapFont's promise
+
+    assert.equal(page.items.at(-1).font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+  });
+
+  void test('layout.hitTest resolves the Rounds/Private Game fields and the right-aligned Start button', async () => {
+    const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+
+    getNewGamePage().items[0].action();
+    const page = getNewGameSettingsPage();
+
+    await Promise.resolve(); // flush LoadBitmapFont's promise, so Start is measured with the real font
+
+    assert.equal(page.layout.hitTest(page.items, 200, 100), 0); // Rounds field row (startY=100)
+    assert.equal(page.layout.hitTest(page.items, 200, 116), 1); // Private Game field row
+    assert.equal(page.layout.hitTest(page.items, 280, 230), 2); // Start, bottom-right corner (right edge x=304, y=224)
+    assert.equal(page.layout.hitTest(page.items, 200, 230), null); // left of Start's column
+    assert.equal(page.layout.hitTest(page.items, 280, 160), null); // above Start's row
   });
 });
 

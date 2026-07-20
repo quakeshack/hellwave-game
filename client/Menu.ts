@@ -1,12 +1,18 @@
-import type { ClientEngineAPI, GLTexture, MenuItem, MenuPic } from '../../../shared/GameInterfaces.ts';
+import type { Action, BitmapFont, ClientEngineAPI, GLTexture, MenuItem, MenuPic } from '../../../shared/GameInterfaces.ts';
 
 import { cvarFlags } from '../../../shared/Defs.ts';
+import Vector from '../../../shared/Vector.ts';
 import { ServerGameAPI } from '../GameAPI.ts';
 
-const SIDEBAR_X = 24;
+// Lines up with the logo's own virtual x position (see #drawLogo).
+const SIDEBAR_X = 16;
 const SESSIONS_X = 140;
 const ROWS_START_Y = 56;
-const ROW_SPACING = 16;
+// Taller than the header font's own glyph height (16 virtual units) so sidebar rows get visible
+// breathing room instead of glyphs from adjacent rows touching.
+const ROW_SPACING = 24;
+// Only drawn for session-list rows now -- sidebar items render with the header font, whose
+// hover/normal color rows already convey focus, making a separate cursor glyph redundant there.
 // A plain printable character rather than the classic special glyph codes (12/13) `VerticalLayout`
 // uses -- those codes are whatever a custom font's low-range "graphics" cells happen to contain,
 // which isn't guaranteed to look like an arrow/cursor at all. Printable ASCII is always safe.
@@ -29,6 +35,10 @@ const CARD_GAP = 20;
 const CARDS_START_Y = 40;
 const CARD_LABEL_LINE_HEIGHT = 8;
 const CARD_LABEL_Y = CARDS_START_Y + CARD_WIDTH + 6;
+// Border drawn around the focused card, in the same light-blue the header font's hover/focused
+// row (variant 0) uses -- sampled from gfx/header-font.png so the two focus cues visually match.
+const CARD_HOVER_BORDER_COLOR = new Vector(0.733, 0.733, 0.733); // new Vector(171 / 255, 231 / 255, 255 / 255);
+const CARD_HOVER_BORDER_THICKNESS = 2;
 
 // How often the main page's session list re-fetches while it's the current page. "Every few
 // seconds" per the plan; 5s balances staying current against hammering the signaling server.
@@ -45,10 +55,30 @@ const SETTINGS_PREVIEW_X = 20;
 const SETTINGS_PREVIEW_Y = 40;
 const SETTINGS_PREVIEW_WIDTH = 80;
 const SETTINGS_FIELDS_LABEL_X = 160;
+// Start button: styled like the main menu's sidebar items (see #buildNewGameSettingsPage),
+// bottom-right rather than stacked with the Rounds/Private Game fields -- mirrors the
+// page-agnostic Back button's bottom-left corner (see M's #backButtonX/#backButtonY), with the
+// same 16px margin from the right edge the sidebar/logo use on the left (see SIDEBAR_X).
+const START_BUTTON_RIGHT_X = 304;
+const START_BUTTON_Y = 216;
+
+// Sidebar main-menu items ("New Game"/"Profile"/"Configure"/"Quit") are drawn with LibreQuake's
+// stylized header font instead of the standard conchars font -- see #buildMainPage. The atlas is
+// uppercase-only (26 letters, no digits/punctuation), which is exactly why it's deliberately not
+// used for the dynamic session list below the sidebar (entries like "e1m1 [3/8]" need digits and
+// brackets the font doesn't have).
+const HEADER_FONT_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const HEADER_FONT_GLYPH_WIDTH = 12;
+const HEADER_FONT_GLYPH_HEIGHT = 16;
+const HEADER_FONT_CELL_WIDTH = 14;
+const HEADER_FONT_CELL_HEIGHT = 18;
 
 let bigboxPic: MenuPic = null!;
 let menuplyrPic: MenuPic = null!;
 let hiResLogoPic: GLTexture | null = null;
+// Cached so #buildNewGameSettingsPage's customDraw can measure the Start button's label width for
+// centering -- read live at draw time since the font finishes loading after page construction.
+let menuFont: BitmapFont | null = null;
 
 /**
  * hellwave's own main menu, replacing id1's inherited image-based page (see
@@ -107,8 +137,24 @@ export default class HellwaveMenu {
 
     HellwaveMenu.#buildProfilePage(engineAPI);
     HellwaveMenu.#buildNewGamePage(engineAPI);
-    HellwaveMenu.#buildNewGameSettingsPage(engineAPI);
-    HellwaveMenu.#buildMainPage(engineAPI);
+    const settingsActions = HellwaveMenu.#buildNewGameSettingsPage(engineAPI);
+    const sidebarActions = HellwaveMenu.#buildMainPage(engineAPI);
+
+    engineAPI.LoadBitmapFont('gfx/header-font.png', {
+      charset: HEADER_FONT_CHARSET,
+      glyphWidth: HEADER_FONT_GLYPH_WIDTH,
+      glyphHeight: HEADER_FONT_GLYPH_HEIGHT,
+      cellWidth: HEADER_FONT_CELL_WIDTH,
+      cellHeight: HEADER_FONT_CELL_HEIGHT,
+      variants: 2,
+    }).then((font) => {
+      menuFont = font;
+      for (const action of [...sidebarActions, ...settingsActions]) {
+        action.font = font;
+      }
+    }).catch(() => {
+      engineAPI.ConsoleWarning('Couldn\'t load hellwave menu header font.\n');
+    });
   }
 
   static #isProfileConfirmed(engineAPI: ClientEngineAPI): boolean {
@@ -136,6 +182,23 @@ export default class HellwaveMenu {
     const { VID } = engineAPI;
 
     return { x: x * 2 + Math.floor(VID.width / 2) - 320, y: y * 2 + Math.floor(VID.height / 2) - 200 };
+  }
+
+  /**
+   * Draw a hollow border (four thin filled rects, not a filled box) around a virtual-space
+   * rectangle -- used to highlight the focused map card in `#buildNewGamePage`.
+   */
+  static #drawHoverBorder(engineAPI: ClientEngineAPI, x: number, y: number, width: number, height: number): void {
+    const t = CARD_HOVER_BORDER_THICKNESS;
+    const { x: screenX, y: screenY } = HellwaveMenu.#toScreenPosition(engineAPI, x - t, y - t);
+    const screenWidth = (width + t * 2) * 2;
+    const screenHeight = (height + t * 2) * 2;
+    const screenThickness = t * 2;
+
+    engineAPI.DrawRect(screenX, screenY, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // top
+    engineAPI.DrawRect(screenX, screenY + screenHeight - screenThickness, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // bottom
+    engineAPI.DrawRect(screenX, screenY, screenThickness, screenHeight, CARD_HOVER_BORDER_COLOR); // left
+    engineAPI.DrawRect(screenX + screenWidth - screenThickness, screenY, screenThickness, screenHeight, CARD_HOVER_BORDER_COLOR); // right
   }
 
   /**
@@ -323,6 +386,10 @@ export default class HellwaveMenu {
             Menu.Print(x, CARDS_START_Y + CARD_WIDTH / 2, 'Loading...');
           }
 
+          if (index === focusedIndex) {
+            HellwaveMenu.#drawHoverBorder(engineAPI, x, CARDS_START_Y, CARD_WIDTH, CARD_WIDTH);
+          }
+
           const lines = HellwaveMenu.#wrapLabel(item.label, Math.floor(CARD_WIDTH / 8));
           lines.forEach((line, lineIndex) => {
             const labelX = x + Math.max(0, (CARD_WIDTH - line.length * 8) / 2);
@@ -377,9 +444,13 @@ export default class HellwaveMenu {
    * clamps at `ROUNDS_MIN`/`ROUNDS_MAX` instead of wrapping, and draws the rounds count itself
    * instead of it being baked into the label string. Starting always goes through
    * `Menu.StartMultiplayerGame` -- hellwave has no real singleplayer mode, so "New Game" hosts a
-   * (possibly solo) multiplayer/coop session either way.
+   * (possibly solo) multiplayer/coop session either way. Start is styled like the main menu's
+   * sidebar items (header font, hover-color focus feedback -- see #buildMainPage) and pinned to
+   * the bottom-right corner rather than stacked in the Rounds/Private Game fields column, so it
+   * needs its own custom layout instead of a single stock `VerticalLayout` for all three items.
+   * @returns `[startAction]`, so `Init()` can attach the header font once it finishes loading.
    */
-  static #buildNewGameSettingsPage(engineAPI: ClientEngineAPI): void {
+  static #buildNewGameSettingsPage(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, MenuPage: MenuPageClass, NumberInput, Toggle, VerticalLayout } = Menu;
 
@@ -404,11 +475,43 @@ export default class HellwaveMenu {
       offLabel: 'no',
     });
 
-    const startAction = new Action({ label: 'Start!' });
+    const startAction = new Action({ label: 'Start!', heightOverride: HEADER_FONT_GLYPH_HEIGHT });
+
+    // Rounds/Private Game keep the stock two-column field layout (reused directly, sliced to just
+    // those two items); Start is measured (once the header font has loaded) and right-aligned
+    // separately below instead of being a third stacked field.
+    const fieldsLayout = new VerticalLayout({ startY: 100, spacing: 8, labelX: SETTINGS_FIELDS_LABEL_X, cursorX: SETTINGS_FIELDS_LABEL_X - 12 });
+
+    const settingsLayout = {
+      draw(rowItems: MenuItem[], focusedIndex: number): void {
+        fieldsLayout.draw(rowItems.slice(0, 2), focusedIndex);
+
+        const start = rowItems[2];
+        const startWidth = menuFont?.measure(start.label) ?? start.label.length * 8;
+        const startX = START_BUTTON_RIGHT_X - startWidth;
+        start.draw(startX, START_BUTTON_Y, focusedIndex === 2);
+      },
+      hitTest(rowItems: MenuItem[], px: number, py: number): number | null {
+        const fieldsHit = fieldsLayout.hitTest(rowItems.slice(0, 2), px, py);
+        if (fieldsHit !== null) {
+          return fieldsHit;
+        }
+
+        const start = rowItems[2];
+        const startWidth = menuFont?.measure(start.label) ?? start.label.length * 8;
+        const startX = START_BUTTON_RIGHT_X - startWidth;
+
+        if (start.focusable && px >= startX && px < startX + startWidth && py >= START_BUTTON_Y && py < START_BUTTON_Y + start.getHeight()) {
+          return 2;
+        }
+
+        return null;
+      },
+    };
 
     const settingsPage = new MenuPageClass({
       title: 'New Game',
-      layout: new VerticalLayout({ startY: 100, spacing: 8, labelX: SETTINGS_FIELDS_LABEL_X, cursorX: SETTINGS_FIELDS_LABEL_X - 12 }),
+      layout: settingsLayout,
       items: [roundsInput, privateToggle, startAction],
       onEscape: () => { Menu.Pop(); },
       onEnter: () => {
@@ -449,35 +552,44 @@ export default class HellwaveMenu {
     };
 
     Menu.RegisterPage('hellwave_newgame_settings', settingsPage);
+
+    return [startAction];
   }
 
-  static #buildMainPage(engineAPI: ClientEngineAPI): void {
+  /**
+   * Builds hellwave's main page and returns the sidebar's `Action`s so `Init()` can attach the
+   * header font to them once it finishes loading (font loading and page construction happen
+   * concurrently -- see `Init()`).
+   * @returns The sidebar actions, in display order.
+   */
+  static #buildMainPage(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, Label, MenuPage: MenuPageClass } = Menu;
 
     const openMapPicker = (): void => { Menu.Push('hellwave_newgame'); };
 
-    const sidebarItems: MenuItem[] = [
-      new Action({
-        label: 'New Game',
-        // Gated on having a confirmed profile first, per "setup a profile, if needed" --
-        // plans/hellwave-main-menu-rework.md §6.
-        action: () => {
-          if (HellwaveMenu.#isProfileConfirmed(engineAPI)) {
-            openMapPicker();
-            return;
-          }
+    const newGameAction = new Action({
+      label: 'New Game',
+      // Gated on having a confirmed profile first, per "setup a profile, if needed" --
+      // plans/hellwave-main-menu-rework.md §6.
+      action: () => {
+        if (HellwaveMenu.#isProfileConfirmed(engineAPI)) {
+          openMapPicker();
+          return;
+        }
 
-          HellwaveMenu.#openProfile(engineAPI, { onAccept: openMapPicker, label: 'Continue' });
-        },
-      }),
-      new Action({
-        label: 'Profile',
-        action: () => { HellwaveMenu.#openProfile(engineAPI); },
-      }),
-      new Action({ label: 'Configure', action: () => { Menu.Push('options'); } }),
-      new Action({ label: 'Quit', action: () => { Menu.Push('quit'); } }),
-    ];
+        HellwaveMenu.#openProfile(engineAPI, { onAccept: openMapPicker, label: 'Continue' });
+      },
+    });
+    const profileAction = new Action({
+      label: 'Profile',
+      action: () => { HellwaveMenu.#openProfile(engineAPI); },
+    });
+    const configureAction = new Action({ label: 'Options', action: () => { Menu.Push('options'); } });
+    const quitAction = new Action({ label: 'Quit', action: () => { Menu.Push('quit'); } });
+
+    const sidebarActions = [newGameAction, profileAction, configureAction, quitAction];
+    const sidebarItems: MenuItem[] = sidebarActions;
 
     HellwaveMenu.#sidebarCount = sidebarItems.length;
 
@@ -493,9 +605,11 @@ export default class HellwaveMenu {
           }
 
           const { x, y } = HellwaveMenu.#rowPosition(index);
-          item.draw(x, y, index === focusedIndex);
+          const focused = index === focusedIndex;
+          item.draw(x, y, focused);
 
-          if (index === focusedIndex && item.focusable) {
+          const hasColorFocusFeedback = item instanceof Action && item.font !== null;
+          if (focused && item.focusable && !hasColorFocusFeedback) {
             Menu.PrintWhite(x - 16, y, CURSOR_MARKER);
           }
         }
@@ -609,5 +723,7 @@ export default class HellwaveMenu {
     });
 
     Menu.RegisterPage('main', mainPage);
+
+    return sidebarActions;
   }
 }
