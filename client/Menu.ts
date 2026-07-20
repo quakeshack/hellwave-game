@@ -440,6 +440,21 @@ export default class HellwaveMenu {
   }
 
   /**
+   * Build the hostname `Start!` commits to the server -- derived from the player's profile name
+   * (`_cl_name`) rather than left for `SV.SpawnServer`'s own empty-string fallback, so a session
+   * is identifiable by its host before anyone even joins. Falls back to the same `'UNNAMED'`
+   * default `SV.SpawnServer`/`NET.hostname` already use if the profile name is empty or
+   * whitespace-only -- reachable via the Profile page's name textbox, which has no non-empty
+   * validator (see #buildProfilePage).
+   * @returns The hostname to commit.
+   */
+  static #buildHostname(profileName: string): string {
+    const trimmedName = profileName.trim();
+
+    return trimmedName === '' ? 'UNNAMED' : `${trimmedName}'s game`;
+  }
+
+  /**
    * The per-map settings screen picking a card leads to: rounds count and public/private, then
    * Start. `hw_rounds`/`sv_public` are read on `onEnter` and only committed (via `SetCvar`) if
    * actually changed, same load-then-commit shape as the profile page -- deliberately *not* a
@@ -550,6 +565,9 @@ export default class HellwaveMenu {
       if (isPrivateGame !== oldIsPrivateGame) {
         engineAPI.SetCvar('sv_public', isPrivateGame ? '0' : '1');
       }
+
+      const profileName = engineAPI.GetCvar('_cl_name')?.string ?? '';
+      engineAPI.SetCvar('hostname', HellwaveMenu.#buildHostname(profileName));
 
       if (engineAPI.SV.active) {
         engineAPI.AppendConsoleText('disconnect\n');

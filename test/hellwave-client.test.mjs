@@ -979,6 +979,7 @@ void describe('Hellwave new game settings', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
     engine.SetCvar('hw_rounds', '10');
     engine.SetCvar('sv_public', '1');
+    engine.SetCvar('_cl_name', 'Christian');
     engine.cvarSets.length = 0; // discard the setup writes above
 
     getNewGamePage().items[0].action();
@@ -990,6 +991,7 @@ void describe('Hellwave new game settings', () => {
     assert.deepEqual(engine.cvarSets, [
       ['hw_rounds', '5'],
       ['sv_public', '0'],
+      ['hostname', "Christian's game"],
     ]);
   });
 
@@ -1002,7 +1004,45 @@ void describe('Hellwave new game settings', () => {
     getNewGamePage().items[0].action();
     getNewGameSettingsPage().items.at(-1).action(); // Start, no changes made
 
-    assert.deepEqual(engine.cvarSets, []);
+    // hostname is committed unconditionally on every Start (see the dedicated tests below) --
+    // this test only cares that hw_rounds/sv_public are left alone when unchanged.
+    assert.deepEqual(engine.cvarSets.filter(([name]) => name !== 'hostname'), []);
+  });
+
+  void describe('Start sets hostname from the profile name', () => {
+    void test('derives "<name>\'s game" from the current _cl_name', () => {
+      const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+      engine.SetCvar('_cl_name', 'Christian');
+      engine.cvarSets.length = 0; // discard the setup write above
+
+      getNewGamePage().items[0].action();
+      getNewGameSettingsPage().items.at(-1).action(); // Start, no other changes
+
+      assert.deepEqual(engine.cvarSets, [['hostname', "Christian's game"]]);
+    });
+
+    void test('falls back to UNNAMED when the profile name is empty or whitespace-only', () => {
+      const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+      engine.SetCvar('_cl_name', '   ');
+      engine.cvarSets.length = 0;
+
+      getNewGamePage().items[0].action();
+      getNewGameSettingsPage().items.at(-1).action(); // Start
+
+      assert.deepEqual(engine.cvarSets, [['hostname', 'UNNAMED']]);
+    });
+
+    void test('is committed every Start, unlike hw_rounds/sv_public which only commit on change', () => {
+      const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+      engine.SetCvar('_cl_name', 'Christian');
+      engine.SetCvar('hostname', "Christian's game"); // already matches what Start would compute
+      engine.cvarSets.length = 0;
+
+      getNewGamePage().items[0].action();
+      getNewGameSettingsPage().items.at(-1).action(); // Start, hostname value unchanged
+
+      assert.deepEqual(engine.cvarSets, [['hostname', "Christian's game"]]);
+    });
   });
 
   void test('Escape pops back to the map picker', () => {
