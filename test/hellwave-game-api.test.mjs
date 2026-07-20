@@ -207,3 +207,14 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
     ]);
   });
 });
+
+void describe('Hellwave ServerGameAPI.GetMapList', () => {
+  void test('each curated map carries its screenshot for the map-select screen', () => {
+    const maps = ServerGameAPI.GetMapList();
+
+    assert.deepEqual(maps.map((map) => [map.name, map.pictures]), [
+      ['hw_doom', ['maps/hw_doom.jpg']],
+      ['hw_e1m2', ['maps/hw_e1m2.jpg']],
+    ]);
+  });
+});

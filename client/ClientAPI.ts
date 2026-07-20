@@ -8,6 +8,8 @@ import { clientEvent, clientEventName } from '../Defs.ts';
 import { ServerGameAPI } from '../GameAPI.ts';
 
 import HellwaveHUD from './HUD.ts';
+import HellwaveMenu from './Menu.ts';
+import { generateRandomPlayerName } from './NameGenerator.ts';
 
 interface HellwaveClientdata extends Id1Clientdata {
   money: number;
@@ -129,6 +131,14 @@ export class ClientGameAPI extends Id1ClientGameAPI {
 
   static override Init(engineAPI: ClientEngineAPI): void {
     super.Init(engineAPI);
+
+    HellwaveMenu.Init(engineAPI);
+
+    // Give first-time players a real name instead of the shared "player" cvar default. Runs
+    // once: _cl_name is ARCHIVE-flagged, so it's never literally "player" again after this.
+    if (engineAPI.GetCvar('_cl_name')?.string === 'player') {
+      engineAPI.SetCvar('_cl_name', generateRandomPlayerName());
+    }
 
     void engineAPI.LoadPicFromFile('gfx/loadingscreen.png').then((texture: GLTexture): void => {
       texture.lockTextureMode('GL_LINEAR');

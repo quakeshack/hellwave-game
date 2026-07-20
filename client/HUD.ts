@@ -52,6 +52,12 @@ const buymenuPostProcessStack = [
   { id: 'blur', settings: { radius: 8 } },
 ] as PostProcessStack;
 
+// Buy-menu row layout, shared between the `VerticalLayout` config and the focus-marker
+// `customDraw` below so the two stay in sync.
+const BUY_MENU_START_Y = 40;
+const BUY_MENU_SPACING = 4;
+const BUY_MENU_CURSOR_X = 24;
+
 @serializableObject
 export default class HellwaveHUD extends Q1HUD {
   declare protected readonly game: ClientGameAPI;
@@ -277,7 +283,11 @@ export default class HellwaveHUD extends Q1HUD {
     }
 
     const page = new MenuPage({
-      layout: new VerticalLayout({ startY: 40, spacing: 4, labelX: 40, cursorX: 24 }),
+      // The built-in blinking cursor glyph is drawn via `customDraw` below instead -- see there
+      // for why.
+      layout: new VerticalLayout({
+        startY: BUY_MENU_START_Y, spacing: BUY_MENU_SPACING, labelX: 40, cursorX: BUY_MENU_CURSOR_X, showCursor: false,
+      }),
       items,
       // Hellwave is always coop-shaped, even solo -- other players, monsters, and the round
       // timer must keep running while one player is shopping, unlike the classic single-player
@@ -290,6 +300,28 @@ export default class HellwaveHUD extends Q1HUD {
       },
       onExit: (): void => { this.#updateBuyzonePostProcess(false); },
       onEscape: (): void => { this.engine.Menu.Pop(); },
+      // `VerticalLayout`'s own cursor (code 12/13) draws whatever a font's low-range "graphics"
+      // cells happen to contain -- not guaranteed to look like a selection indicator at all. Draw
+      // a plain printable `>` next to the focused row instead, computed fresh every frame directly
+      // from `page.cursor`/`page.items` so it's always in sync without a separate refresh hook.
+      customDraw: (page: MenuPage): void => {
+        page.layout?.draw(page.items, page.cursor);
+
+        const { Menu } = this.engine;
+        let y = BUY_MENU_START_Y;
+
+        for (const [index, item] of page.items.entries()) {
+          if (!item.visible) {
+            continue;
+          }
+
+          if (index === page.cursor && item.focusable) {
+            Menu.PrintWhite(BUY_MENU_CURSOR_X, y, '>');
+          }
+
+          y += item.getHeight() + BUY_MENU_SPACING;
+        }
+      },
       customHandleInput: (key: K, _page: MenuPage, defaultHandleInput: (key: K) => boolean): boolean => {
         if (key >= (49 as K) && key <= (57 as K)) { // '1'-'9'
           this.engine.AppendConsoleText(`impulse ${toBuyImpulse(key - 48)}\n`); // key - '0'

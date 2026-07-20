@@ -180,8 +180,8 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
   static override GetMapList(): MapDetails[] {
     return [
-      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: [] },
-      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: [] },
+      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: ['maps/hw_doom.jpg'] },
+      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: ['maps/hw_e1m2.jpg'] },
     ];
   }
 

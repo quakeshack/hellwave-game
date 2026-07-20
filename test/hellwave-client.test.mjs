@@ -12,9 +12,11 @@ const { phases } = await import('../Phases.ts');
 const { buyMenuItems } = await import('../entity/Player.ts');
 const clientApiModule = await import('../client/ClientAPI.ts');
 const hudModule = await import('../client/HUD.ts');
+const menuModule = await import('../client/Menu.ts');
 
 const { ClientGameAPI } = clientApiModule;
 const HellwaveHUD = hudModule.default;
+const HellwaveMenu = menuModule.default;
 
 /**
  * Build the expected buy-menu row label for a catalog entry, matching `HellwaveHUD`'s format.
@@ -110,6 +112,111 @@ function createBuyMenuHud(clientdataOverrides = {}, engineOverrides = {}) {
     hud,
     getBuyMenuPage: () => buyMenuPage,
   };
+}
+
+/**
+ * Create a rig for `HellwaveMenu`, capturing the registered `'main'`/`'hellwave_profile'`/
+ * `'hellwave_newgame'`/`'hellwave_newgame_settings'` pages and tracking calls to the menu
+ * actions the mock stub (`createMockMenuAPI()`) doesn't record on its own
+ * (`Push`/`Pop`/`ForceClose`/`StartMultiplayerGame`), the same way `createBuyMenuHud` captures
+ * `'hellwave_buy'`.
+ * @param {object} engineOverrides Additional overrides merged into the mock engine (besides `Menu`, which this rig owns) -- e.g. `{ Multiplayer: { ListSessions: async () => [...] } }`.
+ * @returns {{ engine: object, calls: { push: string[], pop: number, forceClose: number, startMultiplayerGame: string[] }, getMainPage: () => object, getProfilePage: () => object, getNewGamePage: () => object, getNewGameSettingsPage: () => object }} Test rig.
+ */
+function createMainMenuRig(engineOverrides = {}) {
+  const realMenuAPI = createMockMenuAPI();
+  let mainPage = null;
+  let profilePage = null;
+  let newGamePage = null;
+  let newGameSettingsPage = null;
+  const calls = { push: [], pop: 0, forceClose: 0, startMultiplayerGame: [] };
+
+  const menuAPI = {
+    ...realMenuAPI,
+    RegisterPage(name, page) {
+      if (name === 'main') {
+        mainPage = page;
+      } else if (name === 'hellwave_profile') {
+        profilePage = page;
+      } else if (name === 'hellwave_newgame') {
+        newGamePage = page;
+      } else if (name === 'hellwave_newgame_settings') {
+        newGameSettingsPage = page;
+      }
+      realMenuAPI.RegisterPage(name, page);
+    },
+    Push(name) {
+      calls.push.push(name);
+      realMenuAPI.Push(name);
+    },
+    Pop() {
+      calls.pop += 1;
+      realMenuAPI.Pop();
+    },
+    ForceClose() {
+      calls.forceClose += 1;
+      realMenuAPI.ForceClose();
+    },
+    StartMultiplayerGame(mapname) {
+      calls.startMultiplayerGame.push(mapname);
+    },
+  };
+
+  const engine = createMockClientEngine({ ...engineOverrides, Menu: menuAPI });
+
+  HellwaveMenu.Init(engine);
+
+  return {
+    engine,
+    calls,
+    getMainPage: () => mainPage,
+    getProfilePage: () => profilePage,
+    getNewGamePage: () => newGamePage,
+    getNewGameSettingsPage: () => newGameSettingsPage,
+  };
+}
+
+/**
+ * Temporarily replace the global `setInterval`/`clearInterval` with instrumented stand-ins that
+ * record every call and let a test manually fire a captured callback instead of waiting for a
+ * real interval -- used to test the main page's session-list polling deterministically. `callback`
+ * may be async; it's awaited before the real timers are restored.
+ * @param {(rig: { intervals: Array<{ fn: () => void, ms: number, cleared: boolean }>, tick: (handle: object) => void }) => unknown} callback Test callback, given `{ intervals, tick }`.
+ * @returns {Promise<void>} Resolves once `callback` (and timer restoration) completes.
+ */
+async function withMockTimers(callback) {
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  const intervals = [];
+
+  globalThis.setInterval = (fn, ms) => {
+    const handle = { fn, ms, cleared: false };
+    intervals.push(handle);
+    return handle;
+  };
+  globalThis.clearInterval = (handle) => {
+    if (handle) {
+      handle.cleared = true;
+    }
+  };
+
+  try {
+    await callback({
+      intervals,
+      tick(handle) {
+        if (!handle.cleared) {
+          handle.fn();
+        }
+      },
+    });
+  } finally {
+    // The awaited callback above has already fully settled by this point -- nothing else in
+    // this synchronous process could have reassigned these globals in between.
+    // eslint-disable-next-line require-atomic-updates
+    globalThis.setInterval = originalSetInterval;
+    // eslint-disable-next-line require-atomic-updates
+    globalThis.clearInterval = originalClearInterval;
+  }
 }
 
 void describe('Hellwave HUD', () => {
@@ -281,11 +388,10 @@ void describe('Hellwave HUD', () => {
 
       const page = getBuyMenuPage();
 
-      // Rows show/hide the arrow cursor purely through VerticalLayout's showCursor, since every
-      // widget's own draw() ignores the "focused" flag it's passed -- this was the actual bug:
-      // the buy menu's layout had it explicitly disabled, so hovering moved the cursor but drew
-      // no visible indicator at all.
-      assert.equal(page.layout.showCursor, true);
+      // The built-in blinking cursor is disabled here on purpose (see the next test) -- hover
+      // still tracks `page.cursor` the normal way regardless, since that's `VerticalLayout.hitTest`,
+      // unrelated to whether it also draws its own cursor glyph.
+      assert.equal(page.layout.showCursor, false);
 
       // Row y-positions: header (y=40) + money label (y=52) -- the feedback label is invisible
       // by default and consumes no space -- then item 1 (y=64) and item 2 (y=76), each 8 tall.
@@ -408,5 +514,524 @@ void describe('Hellwave client API', () => {
 
     assert.equal(loadingScreen?.freed, true);
     assert.equal(ClientGameAPI.loadingScreen, null);
+  });
+
+  void test('gives a fresh player a randomized name instead of the shared "player" default', () => {
+    const engine = createMockClientEngine({}, { cvars: { _cl_name: 'player' } });
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    try {
+      ClientGameAPI.Init(engine);
+    } finally {
+      Math.random = originalRandom;
+    }
+
+    assert.notEqual(engine.GetCvar('_cl_name').string, 'player');
+    assert.match(engine.GetCvar('_cl_name').string, /^[A-Z][a-z]+[A-Z][a-z]+\d+$/);
+  });
+
+  void test('leaves an existing custom name untouched', () => {
+    const engine = createMockClientEngine({}, { cvars: { _cl_name: 'ReturningPlayer' } });
+
+    ClientGameAPI.Init(engine);
+
+    assert.equal(engine.GetCvar('_cl_name').string, 'ReturningPlayer');
+  });
+
+  void test('registers the hellwave main menu page alongside the inherited id1 pages', () => {
+    const engine = createMockClientEngine();
+
+    ClientGameAPI.Init(engine);
+
+    engine.Menu.Push('main');
+    assert.equal(engine.Menu.IsOpen('main'), true);
+
+    // 'main' starts a session-list poll interval on activate (onEnter) -- pop it so that
+    // interval is cleared (onExit) instead of leaking past this test.
+    engine.Menu.Pop();
+  });
+});
+
+void describe('Hellwave main menu', () => {
+  // `Action.handleInput(K.ENTER)`/`MenuPage._moveCursor` (arrow keys) play a nav/confirm sound
+  // through the real `S`/`M` registry singletons, which this lightweight mock doesn't set up --
+  // same constraint the buy-menu tests above already work around. Row actions are invoked
+  // directly (`page.items[i].action()`) instead of through `page.handleInput(K.ENTER)`, and
+  // focus/hit-testing is exercised through `updateHover()`/`layout.hitTest()` directly instead of
+  // arrow-key `handleInput()` calls -- neither of those touches sound.
+
+  void test('registers \'main\' with New Game, Profile, Configure, and Quit, all enabled', () => {
+    const { getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    assert.deepEqual(page.items.map((item) => item.label), ['New Game', 'Profile', 'Configure', 'Quit']);
+    assert.deepEqual(page.items.map((item) => item.enabled), [true, true, true, true]);
+  });
+
+  void test('New Game opens the profile gate first when no profile has been confirmed yet', () => {
+    const { calls, getMainPage, getProfilePage } = createMainMenuRig();
+
+    getMainPage().items[0].action();
+
+    assert.deepEqual(calls.push, ['hellwave_profile']);
+    assert.equal(calls.forceClose, 0);
+    assert.equal(getProfilePage().items.at(-1).label, 'Continue'); // gate-specific CTA label
+  });
+
+  void test('New Game opens the map picker immediately once a profile has already been confirmed', () => {
+    const { engine, calls, getMainPage } = createMainMenuRig();
+    engine.SetCvar('hw_profile_confirmed', '1');
+
+    getMainPage().items[0].action();
+
+    assert.deepEqual(calls.push, ['hellwave_newgame']);
+    assert.deepEqual(engine.appendedConsoleText, []);
+    assert.equal(calls.forceClose, 0);
+  });
+
+  void test('accepting the profile gate confirms the profile and then opens the map picker', () => {
+    const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig();
+
+    getMainPage().items[0].action(); // opens the gate, Continue label
+    getProfilePage().items.at(-1).action(); // accept
+
+    assert.equal(engine.GetCvar('hw_profile_confirmed').string, '1');
+    assert.deepEqual(calls.push, ['hellwave_profile', 'hellwave_newgame']);
+  });
+
+  void test('Configure and Quit push the inherited id1 pages', () => {
+    const { calls, getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    page.items[2].action();
+    page.items[3].action();
+
+    assert.deepEqual(calls.push, ['options', 'quit']);
+  });
+
+  void test('hovering the mouse moves focus to the row under the pointer', () => {
+    const { getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    // Row y-positions: New Game (y=56), Profile (y=72), Configure (y=88), Quit (y=104), each 16 tall.
+    // This is what actually fixes the "hover doesn't move the cursor on the main menu" bug -- the
+    // previous implementation had no real `layout`/`items` for `updateHover()` to resolve against.
+    page.updateHover(30, 90);
+    assert.equal(page.cursor, 2); // Configure
+
+    page.updateHover(30, 72);
+    assert.equal(page.cursor, 1); // Profile
+
+    page.updateHover(30, 104);
+    assert.equal(page.cursor, 3); // Quit
+  });
+
+  void test('layout.hitTest resolves sidebar rows within their own column and ignores the empty session column', () => {
+    const { getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    assert.equal(page.layout.hitTest(page.items, 30, 56), 0); // New Game
+    assert.equal(page.layout.hitTest(page.items, 30, 104), 3); // Quit
+    assert.equal(page.layout.hitTest(page.items, 200, 56), null); // session column, nothing there yet
+    assert.equal(page.layout.hitTest(page.items, 30, 500), null); // below every row
+  });
+
+  void test('Escape closes the menu', () => {
+    const { engine, getMainPage } = createMainMenuRig();
+    const page = getMainPage();
+
+    engine.Menu.Push('main');
+    assert.equal(engine.Menu.IsOpen('main'), true);
+
+    page.handleInput(K.ESCAPE);
+
+    assert.equal(engine.Menu.IsOpen(), false);
+  });
+});
+
+void describe('Hellwave profile page', () => {
+  void test('onEnter loads the current name into the field', () => {
+    const { engine, getMainPage, getProfilePage } = createMainMenuRig();
+    engine.SetCvar('_cl_name', 'Grunt99');
+
+    getMainPage().items[1].action(); // Profile, standalone
+
+    assert.equal(getProfilePage().items[0].value, 'Grunt99');
+  });
+
+  void test('opening standalone from the sidebar uses the default label and just pops back on accept', () => {
+    const { calls, getMainPage, getProfilePage } = createMainMenuRig();
+
+    getMainPage().items[1].action();
+    const page = getProfilePage();
+
+    assert.equal(page.items.at(-1).label, 'Accept Changes');
+
+    page.items.at(-1).action();
+
+    assert.equal(calls.pop, 1);
+    assert.deepEqual(calls.push, ['hellwave_profile']); // no map picker opened, this wasn't a gate
+  });
+
+  void test('accepting with an unchanged name sends no console text, but still confirms the profile', () => {
+    const { engine, getMainPage, getProfilePage } = createMainMenuRig();
+    engine.SetCvar('_cl_name', 'Grunt99');
+
+    getMainPage().items[1].action();
+    getProfilePage().items.at(-1).action();
+
+    assert.deepEqual(engine.appendedConsoleText, []);
+    assert.equal(engine.GetCvar('hw_profile_confirmed').string, '1');
+  });
+
+  void test('accepting a changed name sends the name command', () => {
+    const { engine, getMainPage, getProfilePage } = createMainMenuRig();
+    engine.SetCvar('_cl_name', 'Grunt99');
+
+    getMainPage().items[1].action();
+    const page = getProfilePage();
+    page.items[0].value = 'NewName';
+    page.items.at(-1).action();
+
+    assert.deepEqual(engine.appendedConsoleText, ['name "NewName"\n']);
+  });
+
+  void test('accepting a changed color sends the color command', () => {
+    const { engine, getMainPage, getProfilePage } = createMainMenuRig();
+    engine.SetCvar('_cl_color', '0');
+
+    getMainPage().items[1].action();
+    const page = getProfilePage();
+    page.items[1].setValue(3); // vest
+    page.items[2].setValue(7); // pants
+    page.items.at(-1).action();
+
+    assert.deepEqual(engine.appendedConsoleText, ['color 3 7\n']);
+  });
+
+  void test('Escape pops back without confirming the profile or sending anything', () => {
+    const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig();
+    engine.SetCvar('_cl_name', 'Grunt99');
+
+    getMainPage().items[1].action();
+    getProfilePage().items[0].value = 'NewName';
+    getProfilePage().handleInput(K.ESCAPE);
+
+    assert.equal(calls.pop, 1);
+    assert.deepEqual(engine.appendedConsoleText, []);
+    assert.equal(engine.GetCvar('hw_profile_confirmed').string, '0');
+  });
+});
+
+void describe('Hellwave new game map picker', () => {
+  void test('registers \'hellwave_newgame\' with one card per curated map', () => {
+    const { getNewGamePage } = createMainMenuRig();
+    const page = getNewGamePage();
+
+    assert.equal(page.title, 'Select a Map');
+    assert.deepEqual(page.items.map((item) => item.label), ['Doomed computer station', 'Castle of the damned']);
+  });
+
+  void test('layout.hitTest resolves each card and ignores the gap between them', () => {
+    const { getNewGamePage } = createMainMenuRig();
+    const page = getNewGamePage();
+
+    // Cards: hw_doom at x=[30,150), hw_e1m2 at x=[170,290), both y starting at 40.
+    assert.equal(page.layout.hitTest(page.items, 75, 90), 0);
+    assert.equal(page.layout.hitTest(page.items, 200, 90), 1);
+    assert.equal(page.layout.hitTest(page.items, 160, 90), null); // the gap
+    assert.equal(page.layout.hitTest(page.items, 75, 500), null); // below every card
+  });
+
+  void test('long map labels wrap onto a second line instead of overflowing into the next card', () => {
+    // Regression test: a real playtest found "Doomed computer station"/"Castle of the damned"
+    // (both longer than one card is wide, 15 chars/line at CARD_WIDTH=120) rendering as a single
+    // line and running together across the gap into the neighboring card's label. Both curated
+    // labels need wrapping -- assert the hit region grows to cover the wrapped second label line
+    // (y=178, between the old single-line bottom at 174 and the correct two-line bottom at 182)
+    // instead of stopping short after only the first line's height.
+    const { getNewGamePage } = createMainMenuRig();
+    const page = getNewGamePage();
+
+    for (const item of page.items) {
+      assert.ok(item.label.length > 15, `expected "${item.label}" to actually need wrapping for this test to mean anything`);
+    }
+
+    assert.equal(page.layout.hitTest(page.items, 75, 178), 0);
+    assert.equal(page.layout.hitTest(page.items, 200, 178), 1);
+  });
+
+  void test('picking a map opens the per-map settings screen instead of starting it directly', () => {
+    const { calls, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+
+    getNewGamePage().items[0].action(); // hw_doom
+
+    assert.deepEqual(calls.push, ['hellwave_newgame_settings']);
+    assert.equal(calls.forceClose, 0);
+    assert.deepEqual(calls.startMultiplayerGame, []);
+    assert.ok(getNewGameSettingsPage());
+  });
+
+  void test('Escape pops back to the previous page', () => {
+    const { calls, getNewGamePage } = createMainMenuRig();
+
+    getNewGamePage().handleInput(K.ESCAPE);
+
+    assert.equal(calls.pop, 1);
+  });
+});
+
+void describe('Hellwave new game settings', () => {
+  void test('onEnter loads the current rounds and private-game state from cvars', () => {
+    const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+    engine.SetCvar('hw_rounds', '6');
+    engine.SetCvar('sv_public', '0'); // 0 = private
+
+    getNewGamePage().items[0].action(); // hw_doom -- opens the settings screen
+    const page = getNewGameSettingsPage();
+
+    assert.equal(page.items[0].getValue(), 6);
+    assert.equal(page.items[1].getValue(), 1); // private toggle is "on"
+  });
+
+  void test('defaults to 10 rounds and public when the cvars have never been set', () => {
+    // The real engine's GetCvar() returns null for a cvar that was never registered (Cvar.FindVar
+    // semantics); the mock auto-vivifies instead, so this override restores the real contract for
+    // this one test.
+    const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig({ GetCvar: () => null });
+
+    getNewGamePage().items[0].action();
+    const page = getNewGameSettingsPage();
+
+    assert.equal(page.items[0].getValue(), 10);
+    assert.equal(page.items[1].getValue(), 0); // public by default
+  });
+
+  void test('Start always hosts a multiplayer game on the selected map, never a bare singleplayer map', () => {
+    const { engine, calls, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+
+    getNewGamePage().items[1].action(); // hw_e1m2
+    getNewGameSettingsPage().items.at(-1).action(); // Start, no changes made
+
+    assert.deepEqual(calls.startMultiplayerGame, ['hw_e1m2']);
+    assert.equal(calls.forceClose, 1);
+    assert.deepEqual(engine.appendedConsoleText, []); // disconnect only sent when a server is active
+  });
+
+  void test('Start disconnects first when a server is already active', () => {
+    const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+    engine.SV.active = true;
+
+    getNewGamePage().items[0].action();
+    getNewGameSettingsPage().items.at(-1).action();
+
+    assert.deepEqual(engine.appendedConsoleText, ['disconnect\n']);
+  });
+
+  void test('Start commits rounds/private-game only when actually changed from what was loaded', () => {
+    const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+    engine.SetCvar('hw_rounds', '10');
+    engine.SetCvar('sv_public', '1');
+    engine.cvarSets.length = 0; // discard the setup writes above
+
+    getNewGamePage().items[0].action();
+    const page = getNewGameSettingsPage();
+    page.items[0].setValue(5); // Rounds: 5
+    page.items[1].setValue(1); // private
+    page.items.at(-1).action(); // Start
+
+    assert.deepEqual(engine.cvarSets, [
+      ['hw_rounds', '5'],
+      ['sv_public', '0'],
+    ]);
+  });
+
+  void test('Start does not touch cvars that were left unchanged', () => {
+    const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+    engine.SetCvar('hw_rounds', '10');
+    engine.SetCvar('sv_public', '1');
+    engine.cvarSets.length = 0; // discard the setup writes above
+
+    getNewGamePage().items[0].action();
+    getNewGameSettingsPage().items.at(-1).action(); // Start, no changes made
+
+    assert.deepEqual(engine.cvarSets, []);
+  });
+
+  void test('Escape pops back to the map picker', () => {
+    const { calls, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig();
+
+    getNewGamePage().items[0].action();
+    getNewGameSettingsPage().handleInput(K.ESCAPE);
+
+    assert.equal(calls.pop, 1);
+  });
+});
+
+void describe('Hellwave live session list', () => {
+  void test('onEnter fetches sessions immediately and shows one row per session', async () => {
+    const { engine, getMainPage } = createMainMenuRig({
+      Multiplayer: {
+        ListSessions: () => Promise.resolve([
+          { sessionId: 'abc', map: 'hw_doom', currentPlayers: 2, maxPlayers: 4 },
+          { sessionId: 'def', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4 },
+        ]),
+      },
+    });
+
+    engine.Menu.Push('main');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), [
+      'hw_doom [2/4]',
+      'hw_e1m2 [1/4]',
+    ]);
+
+    engine.Menu.Pop();
+  });
+
+  void test('shows "No sessions found." when the list is empty', async () => {
+    const { engine, getMainPage } = createMainMenuRig(); // default mock resolves []
+
+    engine.Menu.Push('main');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['No sessions found.']);
+
+    engine.Menu.Pop();
+  });
+
+  void test('shows "Unable to fetch sessions" when the fetch rejects', async () => {
+    const { engine, getMainPage } = createMainMenuRig({
+      Multiplayer: { ListSessions: () => Promise.reject(new Error('network down')) },
+    });
+
+    engine.Menu.Push('main');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Unable to fetch sessions']);
+
+    engine.Menu.Pop();
+  });
+
+  void test('joining a session connects and closes the menu once a profile is confirmed', async () => {
+    const { engine, getMainPage } = createMainMenuRig({
+      Multiplayer: { ListSessions: () => Promise.resolve([{ sessionId: 'abc', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]) },
+    });
+    engine.SetCvar('hw_profile_confirmed', '1');
+
+    engine.Menu.Push('main');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    getMainPage().items[4].action();
+
+    assert.deepEqual(engine.appendedConsoleText, ['connect webrtc://abc\n']);
+    assert.equal(engine.Menu.IsOpen(), false); // Menu.Close(), same as id1's launch_server join
+  });
+
+  void test('joining a session opens the profile gate first when unconfirmed, and accepting connects', async () => {
+    const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig({
+      Multiplayer: { ListSessions: () => Promise.resolve([{ sessionId: 'abc', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]) },
+    });
+
+    engine.Menu.Push('main');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    getMainPage().items[4].action(); // Join -- no profile confirmed yet
+
+    assert.deepEqual(calls.push, ['main', 'hellwave_profile']);
+    assert.equal(getProfilePage().items.at(-1).label, 'Continue');
+    assert.deepEqual(engine.appendedConsoleText, []); // not connected yet
+
+    getProfilePage().items.at(-1).action(); // accept
+
+    assert.deepEqual(engine.appendedConsoleText, ['connect webrtc://abc\n']);
+    assert.equal(engine.GetCvar('hw_profile_confirmed').string, '1');
+    assert.equal(engine.Menu.IsOpen(), false);
+  });
+
+  void test('polls for fresh sessions on an interval while showing, and stops once the page exits', async () => {
+    let callCount = 0;
+    const { engine, getMainPage } = createMainMenuRig({
+      Multiplayer: {
+        ListSessions: () => {
+          callCount++;
+          return Promise.resolve(callCount === 1
+            ? [{ sessionId: 'first', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]
+            : [{ sessionId: 'second', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4 }]);
+        },
+      },
+    });
+
+    await withMockTimers(async ({ intervals, tick }) => {
+      engine.Menu.Push('main');
+      await Promise.resolve();
+      await Promise.resolve();
+
+      assert.equal(callCount, 1);
+      assert.equal(intervals.length, 1);
+      assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['hw_doom [1/4]']);
+
+      tick(intervals[0]);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      assert.equal(callCount, 2);
+      assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['hw_e1m2 [2/4]']);
+
+      engine.Menu.Pop(); // onExit -- must clear the interval
+
+      assert.equal(intervals[0].cleared, true);
+
+      tick(intervals[0]); // tick() itself checks .cleared and no-ops
+      await Promise.resolve();
+
+      assert.equal(callCount, 2); // unchanged
+    });
+  });
+
+  void test('skips a poll tick while the previous fetch is still in flight, instead of racing it', async () => {
+    let resolveFirstFetch;
+    let fetchCallCount = 0;
+    const { engine } = createMainMenuRig({
+      Multiplayer: {
+        ListSessions: () => {
+          fetchCallCount++;
+          if (fetchCallCount === 1) {
+            return new Promise((resolve) => { resolveFirstFetch = resolve; });
+          }
+          return Promise.resolve([]);
+        },
+      },
+    });
+
+    await withMockTimers(async ({ intervals, tick }) => {
+      engine.Menu.Push('main');
+      await Promise.resolve(); // onEnter's immediate refresh starts, but its fetch never resolves yet
+
+      assert.equal(fetchCallCount, 1);
+
+      tick(intervals[0]); // a poll tick while the first fetch is still pending
+      await Promise.resolve();
+
+      assert.equal(fetchCallCount, 1); // skipped -- sessionRefreshInFlight guard
+
+      resolveFirstFetch([]);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      tick(intervals[0]); // now the guard is clear again
+      await Promise.resolve();
+
+      assert.equal(fetchCallCount, 2);
+
+      engine.Menu.Pop();
+    });
   });
 });
