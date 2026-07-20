@@ -6,7 +6,9 @@ import { ServerGameAPI } from '../GameAPI.ts';
 
 // Lines up with the logo's own virtual x position (see #drawLogo).
 const SIDEBAR_X = 16;
-const SESSIONS_X = 140;
+// Pushed clear of the sidebar column so the two don't visually crowd each other -- the sidebar's
+// own hit-test boundary (see #buildMainPage's layout.hitTest) is derived from this same constant.
+const SESSIONS_X = 180;
 const ROWS_START_Y = 56;
 // Taller than the header font's own glyph height (16 virtual units) so sidebar rows get visible
 // breathing room instead of glyphs from adjacent rows touching.
@@ -663,7 +665,7 @@ export default class HellwaveMenu {
 
       if (!hasLoadedSessionsOnce) {
         mainPage.items.length = HellwaveMenu.#sidebarCount;
-        mainPage.items.push(new Label({ label: 'Finding sessions...' }));
+        mainPage.items.push(new Label({ label: 'Finding games...' }));
       }
 
       try {
@@ -675,7 +677,7 @@ export default class HellwaveMenu {
         mainPage.items.length = HellwaveMenu.#sidebarCount;
 
         if (sessions.length === 0) {
-          mainPage.items.push(new Label({ label: 'No sessions found.' }));
+          mainPage.items.push(new Label({ label: 'No active games.' }));
         } else {
           for (const session of sessions) {
             mainPage.items.push(new Action({
@@ -690,7 +692,7 @@ export default class HellwaveMenu {
       } catch (error: unknown) {
         // eslint-disable-next-line require-atomic-updates
         mainPage.items.length = HellwaveMenu.#sidebarCount;
-        mainPage.items.push(new Label({ label: 'Unable to fetch sessions' }));
+        mainPage.items.push(new Label({ label: 'Game lobby error.' }));
         engineAPI.ConsoleError(`Failed to fetch hellwave sessions: ${String(error)}\n`);
       } finally {
         // eslint-disable-next-line require-atomic-updates

@@ -846,10 +846,10 @@ void describe('Hellwave new game map picker', () => {
     assert.equal(page.layout.hitTest(page.items, 75, 500), null); // below every card
   });
 
-  void test('draws a light-blue hover border around only the focused card', () => {
+  void test('draws a hover border around only the focused card', () => {
     const { engine, getNewGamePage } = createMainMenuRig();
     const page = getNewGamePage();
-    const hoverColor = new Vector(171 / 255, 231 / 255, 255 / 255);
+    const hoverColor = new Vector(0.733, 0.733, 0.733);
 
     engine.drawRects.length = 0;
     page.layout.draw(page.items, 0);
@@ -1041,19 +1041,19 @@ void describe('Hellwave live session list', () => {
     engine.Menu.Pop();
   });
 
-  void test('shows "No sessions found." when the list is empty', async () => {
+  void test('shows "No active games." when the list is empty', async () => {
     const { engine, getMainPage } = createMainMenuRig(); // default mock resolves []
 
     engine.Menu.Push('main');
     await Promise.resolve();
     await Promise.resolve();
 
-    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['No sessions found.']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['No active games.']);
 
     engine.Menu.Pop();
   });
 
-  void test('shows "Unable to fetch sessions" when the fetch rejects', async () => {
+  void test('shows "Game lobby error." when the fetch rejects', async () => {
     const { engine, getMainPage } = createMainMenuRig({
       Multiplayer: { ListSessions: () => Promise.reject(new Error('network down')) },
     });
@@ -1062,7 +1062,7 @@ void describe('Hellwave live session list', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Unable to fetch sessions']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Game lobby error.']);
 
     engine.Menu.Pop();
   });
