@@ -9,7 +9,7 @@ import { clientEvent, clientEventName } from '../Defs.ts';
 import { ServerGameAPI } from '../GameAPI.ts';
 
 import HellwaveHUD from './HUD.ts';
-import HellwaveMenu from './Menu.ts';
+import HellwaveMenu from './menu/Menu.ts';
 import { generateRandomPlayerName } from './NameGenerator.ts';
 
 interface HellwaveClientdata extends Id1Clientdata {

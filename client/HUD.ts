@@ -1,16 +1,15 @@
 import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
-import type { ClientEdict, ClientEngineAPI, MenuItem, MenuPage, PostProcessStack } from '../../../shared/GameInterfaces.ts';
+import type { ClientEdict, ClientEngineAPI, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
-import { K } from '../../../shared/Keys.ts';
 import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
 
 import { MessageBag, Q1HUD } from '../../id1/client/HUD.ts';
-import { clientEvent, clientEventName, colors, contentShift, formatMoney, toBuyImpulse } from '../Defs.ts';
-import { buyMenuItems } from '../entity/Player.ts';
+import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.ts';
 import { phaseLabels, phases } from '../Phases.ts';
 
 import type { ClientGameAPI } from './ClientAPI.ts';
+import HellwaveBuyMenu from './menu/BuyMenu.ts';
 import { HellwaveStatsInfo } from './Sync.ts';
 
 type MoneyBalanceState = [number | null, number | null, number];
@@ -52,12 +51,6 @@ const buymenuPostProcessStack = [
   { id: 'blur', settings: { radius: 8 } },
 ] as PostProcessStack;
 
-// Buy-menu row layout, shared between the `VerticalLayout` config and the focus-marker
-// `customDraw` below so the two stay in sync.
-const BUY_MENU_START_Y = 40;
-const BUY_MENU_SPACING = 4;
-const BUY_MENU_CURSOR_X = 24;
-
 @serializableObject
 export default class HellwaveHUD extends Q1HUD {
   declare protected readonly game: ClientGameAPI;
@@ -68,28 +61,14 @@ export default class HellwaveHUD extends Q1HUD {
     money: [null, null, -Infinity],
   };
 
-  #buyMenuActions: Map<number, MenuItem> = new Map();
-  #buyMoneyLabel: MenuItem | null = null;
-  #buyFeedbackLabel: MenuItem | null = null;
-  #buyFeedbackExpiry = -Infinity;
-
-  // Whichever instance is currently live -- a fresh `HellwaveHUD` is constructed on every map
-  // load (see `ClientGameAPI`), but the `hw_buymenu` command is only ever registered once (see
-  // `Init`), so its handler needs a way to reach the live instance's clientdata.
-  static #activeHUD: HellwaveHUD | null = null;
-
-  override init(): void {
-    super.init();
-
-    HellwaveHUD.#activeHUD = this;
-  }
+  // Assigned in `_subscribeToEvents()`, which the base class's `init()` always calls before
+  // anything else on this instance can run.
+  #buyMenu!: HellwaveBuyMenu;
 
   override shutdown(): void {
     super.shutdown();
 
-    if (HellwaveHUD.#activeHUD === this) {
-      HellwaveHUD.#activeHUD = null;
-    }
+    this.#buyMenu.dispose();
   }
 
   protected override _newStats(): HellwaveStatsInfo {
@@ -103,19 +82,20 @@ export default class HellwaveHUD extends Q1HUD {
   protected override _subscribeToEvents(): void {
     super._subscribeToEvents();
 
-    this.#registerBuyMenu();
+    this.#buyMenu = new HellwaveBuyMenu(this, this.engine);
+    this.#buyMenu.register();
 
     this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: number | string | boolean | null): void => {
       switch (field) {
-        // Opening the buy menu is handled by the `hw_buymenu` command (see `Init`) -- the server
-        // only tells us whether the player is physically in a buyzone. The only thing this needs
-        // to react to is an *involuntary* close: leaving the zone, or the round moving on, while
-        // the menu happens to be showing.
+        // Opening the buy menu is handled by the `hw_buymenu` command (see
+        // `HellwaveBuyMenu.Init`) -- the server only tells us whether the player is physically in
+        // a buyzone. The only thing this needs to react to is an *involuntary* close: leaving the
+        // zone, or the round moving on, while the menu happens to be showing.
         case 'buyzone': {
           console.assert(typeof value === 'number' && value >= -1 && value <= 1);
           const buyzone = value as -1 | 0 | 1;
 
-          if (buyzone !== 1 && this.engine.Menu.IsOpen('hellwave_buy')) {
+          if (buyzone !== 1 && this.#buyMenu.isOpen()) {
             this.engine.Menu.Pop();
           }
           break;
@@ -124,7 +104,7 @@ export default class HellwaveHUD extends Q1HUD {
         case 'money':
           console.assert(typeof value === 'number');
           this.inventory.money = [value as number, this.inventory.money[0], this.engine.CL.gametime];
-          this.#refreshBuyMenuIfOpen();
+          this.#buyMenu.refreshIfOpen();
           break;
 
         default:
@@ -161,34 +141,12 @@ export default class HellwaveHUD extends Q1HUD {
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance: number): void => {
       this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.gametime];
-      this.#refreshBuyMenuIfOpen();
+      this.#buyMenu.refreshIfOpen();
     });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.BUY_MESSAGE), (message: string): void => {
-      const feedbackLabel = this.#buyFeedbackLabel;
-
-      if (feedbackLabel === null) {
-        return;
-      }
-
-      feedbackLabel.label = message;
-      feedbackLabel.visible = true;
-      this.#buyFeedbackExpiry = this.engine.CL.gametime + 3.0;
+      this.#buyMenu.showFeedback(message);
     });
-  }
-
-  /**
-   * Refresh the buy menu's rows and balance label -- only meaningful (and only does work) while
-   * the menu is actually open, called both on the periodic clientdata sync and on the immediate
-   * `MONEY_UPDATE` event a purchase fires, whichever lands first.
-   */
-  #refreshBuyMenuIfOpen(): void {
-    if (!this.engine.Menu.IsOpen('hellwave_buy')) {
-      return;
-    }
-
-    this.#refreshBuyMenuActions();
-    this.#refreshBuyMoneyLabel();
   }
 
   protected override _drawStatusBar(): void {
@@ -208,7 +166,8 @@ export default class HellwaveHUD extends Q1HUD {
 
     this.#drawAccountBalance();
     this.#drawRoundStats();
-    this.#drawBuyMenu();
+    this.#drawBuyzonePrompt();
+    this.#buyMenu.tick(this.engine.CL.gametime);
     this.#drawPlayerNames();
   }
 
@@ -263,114 +222,33 @@ export default class HellwaveHUD extends Q1HUD {
   }
 
   /**
-   * Register the buy menu as a real page on the menu stack -- instead of a manually drawn
-   * overlay -- so it gets mouse click/hover, cursor handling, and Escape/Back navigation for
-   * free from the same pipeline the main menu already uses. Opened by the `hw_buymenu` client
-   * command (see `Init`) whenever the server confirms we're in a buyzone; closed
-   * either by the player (Escape/Back, purely local) or reactively if the server later says
-   * we've left the zone. The server has no notion of "menu open" at all -- purchases carry their
-   * own dedicated impulse range (`toBuyImpulse`/`fromBuyImpulse` in Defs.ts) and are validated
-   * independently each time one lands, so this page can freely open/close without any
-   * server round-trip.
+   * Whether the player is currently standing in a buyzone, per the last-synced clientdata --
+   * used by `HellwaveBuyMenu`'s `hw_buymenu` command handler, which can't read `game.clientdata`
+   * directly since `game` is protected.
+   * @returns Whether the player is currently in a buyzone.
    */
-  #registerBuyMenu(): void {
-    const { Action, Label, MenuPage, VerticalLayout } = this.engine.Menu;
-
-    this.#buyMoneyLabel = new Label({ label: '' });
-    this.#buyFeedbackLabel = new Label({ label: '', visible: false });
-
-    const items: MenuItem[] = [
-      new Label({ label: 'Available for purchase:' }),
-      this.#buyMoneyLabel,
-      this.#buyFeedbackLabel,
-    ];
-
-    for (const impulse of Object.keys(buyMenuItems)) {
-      const action = new Action({
-        label: '',
-        visible: false,
-        action: (): void => { this.engine.AppendConsoleText(`impulse ${toBuyImpulse(Number(impulse))}\n`); },
-      });
-      this.#buyMenuActions.set(Number(impulse), action);
-      items.push(action);
-    }
-
-    const page = new MenuPage({
-      // The built-in blinking cursor glyph is drawn via `customDraw` below instead -- see there
-      // for why.
-      layout: new VerticalLayout({
-        startY: BUY_MENU_START_Y, spacing: BUY_MENU_SPACING, labelX: 40, cursorX: BUY_MENU_CURSOR_X, showCursor: false,
-      }),
-      items,
-      // Hellwave is always coop-shaped, even solo -- other players, monsters, and the round
-      // timer must keep running while one player is shopping, unlike the classic single-player
-      // pause-on-menu behavior every other page keeps by default.
-      pausesGame: false,
-      onEnter: (): void => {
-        this.#refreshBuyMenuActions();
-        this.#refreshBuyMoneyLabel();
-        this.#updateBuyzonePostProcess(true);
-      },
-      onExit: (): void => { this.#updateBuyzonePostProcess(false); },
-      onEscape: (): void => { this.engine.Menu.Pop(); },
-      // `VerticalLayout`'s own cursor (code 12/13) draws whatever a font's low-range "graphics"
-      // cells happen to contain -- not guaranteed to look like a selection indicator at all. Draw
-      // a plain printable `>` next to the focused row instead, computed fresh every frame directly
-      // from `page.cursor`/`page.items` so it's always in sync without a separate refresh hook.
-      customDraw: (page: MenuPage): void => {
-        page.layout?.draw(page.items, page.cursor);
-
-        const { Menu } = this.engine;
-        let y = BUY_MENU_START_Y;
-
-        for (const [index, item] of page.items.entries()) {
-          if (!item.visible) {
-            continue;
-          }
-
-          if (index === page.cursor && item.focusable) {
-            Menu.PrintWhite(BUY_MENU_CURSOR_X, y, '>');
-          }
-
-          y += item.getHeight() + BUY_MENU_SPACING;
-        }
-      },
-      customHandleInput: (key: K, _page: MenuPage, defaultHandleInput: (key: K) => boolean): boolean => {
-        if (key >= (49 as K) && key <= (57 as K)) { // '1'-'9'
-          this.engine.AppendConsoleText(`impulse ${toBuyImpulse(key - 48)}\n`); // key - '0'
-          return true;
-        }
-
-        return defaultHandleInput(key);
-      },
-    });
-
-    this.engine.Menu.RegisterPage('hellwave_buy', page);
+  isInBuyzone(): boolean {
+    return this.game.clientdata.buyzone === 1;
   }
 
-  #refreshBuyMenuActions(): void {
-    const currentMoney = this.inventory.money[0] ?? 0;
+  /**
+   * Toggle the buy-menu blur/desaturate post-process stack -- called by `HellwaveBuyMenu`'s page
+   * on `onEnter`/`onExit`. Not applied over the game-over color-grade stack, which already owns
+   * the screen at that point.
+   */
+  setBuyMenuBlur(active: boolean): void {
+    if (this.stats?.phase === phases.gameover) {
+      return;
+    }
 
-    for (const [impulse, item] of Object.entries(buyMenuItems)) {
-      const action = this.#buyMenuActions.get(Number(impulse))!;
-      action.visible = item.cost <= currentMoney;
-      action.label = `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`;
+    if (active) {
+      this.engine.PostProcess.setStack(buymenuPostProcessStack);
+    } else {
+      this.engine.PostProcess.clearStack();
     }
   }
 
-  #refreshBuyMoneyLabel(): void {
-    this.#buyMoneyLabel!.label = `Balance: ${formatMoney(this.inventory.money[0] ?? 0)}`;
-  }
-
-  #drawBuyMenu(): void {
-    // Purchase feedback (e.g. "bought Heavy Armor!") persists for a few seconds, ticked here
-    // since this runs every frame regardless of whether the buy menu page itself is visible.
-    const feedbackLabel = this.#buyFeedbackLabel;
-
-    if (feedbackLabel !== null && feedbackLabel.visible && this.engine.CL.gametime >= this.#buyFeedbackExpiry) {
-      feedbackLabel.visible = false;
-    }
-
+  #drawBuyzonePrompt(): void {
     if (this.game.clientdata.buyzone === 1) {
       this.sbar.drawString(-16 * 10, -48, 'Buyzone!', 2.0, new Vector(0.0, 1.0, 0.0));
     }
@@ -413,35 +291,15 @@ export default class HellwaveHUD extends Q1HUD {
     this.sbar.drawString(0, -48, phaseLabels[this.stats!.phase!] ?? '', 2.0);
   }
 
-  #updateBuyzonePostProcess(buyMenuOpen: boolean): void {
-    if (this.stats?.phase !== phases.gameover) {
-      if (buyMenuOpen) {
-        this.engine.PostProcess.setStack(buymenuPostProcessStack);
-      } else {
-        this.engine.PostProcess.clearStack();
-      }
-    }
-  }
-
   static override Init(engineAPI: ClientEngineAPI): void {
     super.Init(engineAPI);
 
-    // Registered once here rather than per-instance -- a fresh `HellwaveHUD` is constructed on
-    // every map load (see `ClientGameAPI`), and `Cmd.AddCommand` asserts when a command name is
-    // already registered. `#activeHUD` (kept current by `init`/`shutdown`) lets this single,
-    // long-lived handler still read whichever instance is actually live.
-    engineAPI.RegisterCommand('hw_buymenu', (): void => {
-      const activeHUD = HellwaveHUD.#activeHUD;
-
-      if (activeHUD !== null && activeHUD.game.clientdata.buyzone === 1 && !engineAPI.Menu.IsOpen('hellwave_buy')) {
-        engineAPI.Menu.Open('hellwave_buy');
-      }
-    });
+    HellwaveBuyMenu.Init(engineAPI);
   }
 
   static override Shutdown(engineAPI: ClientEngineAPI): void {
     super.Shutdown(engineAPI);
 
-    engineAPI.UnregisterCommand('hw_buymenu');
+    HellwaveBuyMenu.Shutdown(engineAPI);
   }
 }
