@@ -6,6 +6,7 @@ import Vector from '../../../shared/Vector.ts';
 
 import { MessageBag, Q1HUD } from '../../id1/client/HUD.ts';
 import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.ts';
+import type { BuyMenuAvailabilityContext } from '../entity/Player.ts';
 import { phaseLabels, phases } from '../Phases.ts';
 
 import type { ClientGameAPI } from './ClientAPI.ts';
@@ -229,6 +230,16 @@ export default class HellwaveHUD extends Q1HUD {
    */
   isInBuyzone(): boolean {
     return this.game.clientdata.buyzone === 1;
+  }
+
+  /**
+   * Snapshot of the clientdata fields a `BuyMenuItem.available()` predicate may inspect (e.g.
+   * armor/ammo caps) -- lets `HellwaveBuyMenu` gray out already-maxed items without a server
+   * round-trip. `game.clientdata` itself is protected.
+   * @returns Current armor value and shell ammo count.
+   */
+  getBuyAvailabilityContext(): BuyMenuAvailabilityContext {
+    return { armorvalue: this.game.clientdata.armorvalue, ammo_shells: this.game.clientdata.ammo_shells };
   }
 
   /**

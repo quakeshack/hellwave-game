@@ -34,10 +34,21 @@ interface BuyMenuEntityClass {
   readonly classname: string;
 }
 
+/**
+ * The subset of player state a `BuyMenuItem.available()` predicate may inspect. Deliberately
+ * narrower than `HellwavePlayer` so the client-side buy menu (`HellwaveBuyMenu`) can evaluate the
+ * same predicates from synced `clientdata` alone, without a server round-trip -- see
+ * `HellwaveHUD.getBuyAvailabilityContext()`.
+ */
+export interface BuyMenuAvailabilityContext {
+  readonly armorvalue: number;
+  readonly ammo_shells: number;
+}
+
 interface BuyMenuItem {
   readonly cost: number;
   readonly label: string;
-  readonly available?: (playerEntity: HellwavePlayer) => boolean;
+  readonly available?: (context: BuyMenuAvailabilityContext) => boolean;
   readonly entityClass?: BuyMenuEntityClass;
   readonly backpack?: BuyMenuBackpack;
   readonly spawnflags?: number;
@@ -49,8 +60,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     cost: 100,
     label: 'Heavy Armor',
     entityClass: HeavyArmorEntity,
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.armorvalue < 200;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.armorvalue < 200;
     },
   },
 
@@ -59,8 +70,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     cost: 200,
     label: 'Shotgun / 20 shells',
     backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 },
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
 
@@ -70,8 +81,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     label: 'Super Shotgun',
     entityClass: WeaponSuperShotgun,
     backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 },
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
 

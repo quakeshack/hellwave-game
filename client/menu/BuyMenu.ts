@@ -63,18 +63,20 @@ export default class HellwaveBuyMenu {
     const items: MenuItem[] = [
       new Label({ label: 'Available for purchase:' }),
       this.#moneyLabel,
-      this.#feedbackLabel,
     ];
 
     for (const impulse of Object.keys(buyMenuItems)) {
       const action = new Action({
         label: '',
-        visible: false,
         action: (): void => { this.#engine.AppendConsoleText(`impulse ${toBuyImpulse(Number(impulse))}\n`); },
       });
       this.#actions.set(Number(impulse), action);
       items.push(action);
     }
+
+    // Below the list, not above it -- so a purchase confirmation/rejection message never
+    // shifts the row positions the player is currently looking at.
+    items.push(this.#feedbackLabel);
 
     const page = new MenuPageClass({
       // The built-in blinking cursor glyph is drawn via `customDraw` below instead -- see there
@@ -118,7 +120,15 @@ export default class HellwaveBuyMenu {
       },
       customHandleInput: (key: K, _page: MenuPage, defaultHandleInput: (key: K) => boolean): boolean => {
         if (key >= (49 as K) && key <= (57 as K)) { // '1'-'9'
-          this.#engine.AppendConsoleText(`impulse ${toBuyImpulse(key - 48)}\n`); // key - '0'
+          const impulseId = key - 48; // key - '0'
+          const action = this.#actions.get(impulseId);
+
+          // Rows are always shown now, even when unaffordable/unbuyable (dimmed via `enabled`)
+          // -- the numeric shortcut has to respect that the same way a click already does.
+          if (action?.enabled) {
+            this.#engine.AppendConsoleText(`impulse ${toBuyImpulse(impulseId)}\n`);
+          }
+
           return true;
         }
 
@@ -186,12 +196,20 @@ export default class HellwaveBuyMenu {
     }
   }
 
+  /**
+   * Refresh every row's label and enabled state. Rows are always shown -- items the player can't
+   * currently afford or buy (e.g. armor/ammo already at cap) stay visible but dimmed (`Action`'s
+   * own `enabled`-gated draw/activation), so the full catalog is always visible as a reference.
+   */
   #refreshActions(): void {
     const currentMoney = this.#hud.inventory.money[0] ?? 0;
+    const availabilityContext = this.#hud.getBuyAvailabilityContext();
 
     for (const [impulse, item] of Object.entries(buyMenuItems)) {
       const action = this.#actions.get(Number(impulse))!;
-      action.visible = item.cost <= currentMoney;
+      const buyable = item.available?.(availabilityContext) ?? true;
+
+      action.enabled = buyable && item.cost <= currentMoney;
       action.label = `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`;
     }
   }

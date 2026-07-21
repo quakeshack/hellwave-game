@@ -177,25 +177,39 @@ void describe('buy menu as a real menu page', () => {
     assert.equal(engine.Menu.IsOpen('hellwave_buy'), false);
   });
 
-  void test('refreshes row labels, the balance label, and hides items the player cannot afford, on open and on money changes', () => {
+  void test('refreshes row labels and the balance label, keeping every row visible but disabling what the player cannot yet afford', () => {
     const { engine, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 0 });
 
     engine.eventBus.publish('client.clientdata.field-changed', 'money', 150, 0);
     pressBuyMenuKey(engine);
 
     const page = getBuyMenuPage();
-    const [, moneyLabel, , heavyArmorRow, shotgunRow] = page.items;
+    const [, moneyLabel, heavyArmorRow, shotgunRow] = page.items;
 
     assert.equal(moneyLabel.label, `Balance: ${formatMoney(150)}`);
     assert.equal(heavyArmorRow.visible, true); // costs 100
+    assert.equal(heavyArmorRow.enabled, true);
     assert.equal(heavyArmorRow.label, expectedBuyRowLabel(1));
-    assert.equal(shotgunRow.visible, false); // costs 200, can't afford yet
+    assert.equal(shotgunRow.visible, true); // costs 200, can't afford yet -- still shown
+    assert.equal(shotgunRow.enabled, false);
 
     engine.eventBus.publish('client.clientdata.field-changed', 'money', 250, 150);
 
     assert.equal(moneyLabel.label, `Balance: ${formatMoney(250)}`);
-    assert.equal(shotgunRow.visible, true);
+    assert.equal(shotgunRow.enabled, true);
     assert.equal(shotgunRow.label, expectedBuyRowLabel(2));
+  });
+
+  void test('disables an affordable row whose available() predicate says it is already maxed out', () => {
+    const { engine, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 1000, armorvalue: 200 });
+
+    engine.eventBus.publish('client.clientdata.field-changed', 'money', 1000, 0);
+    pressBuyMenuKey(engine);
+
+    const heavyArmorRow = getBuyMenuPage().items[2];
+
+    assert.equal(heavyArmorRow.visible, true);
+    assert.equal(heavyArmorRow.enabled, false); // affordable, but armor is already at the 200 cap
   });
 
   void test('activating a row sends its dedicated buy-impulse, never a plain weapon-select impulse', () => {
@@ -204,7 +218,7 @@ void describe('buy menu as a real menu page', () => {
     engine.eventBus.publish('client.clientdata.field-changed', 'money', 1000, 0);
     pressBuyMenuKey(engine);
 
-    const heavyArmorRow = getBuyMenuPage().items[3];
+    const heavyArmorRow = getBuyMenuPage().items[2];
     heavyArmorRow.action();
 
     assert.deepEqual(engine.appendedConsoleText, [`impulse ${toBuyImpulse(1)}\n`]);
@@ -223,21 +237,23 @@ void describe('buy menu as a real menu page', () => {
     // unrelated to whether it also draws its own cursor glyph.
     assert.equal(page.layout.showCursor, false);
 
-    // Row y-positions: header (y=40) + money label (y=52) -- the feedback label is invisible
-    // by default and consumes no space -- then item 1 (y=64) and item 2 (y=76), each 8 tall.
+    // Row y-positions: header (y=40) + money label (y=52) -- then item 1 (y=64) and item 2
+    // (y=76), each 8 tall. The feedback label now sits below the whole list, so it doesn't
+    // shift these.
     page.updateHover(100, 66);
-    assert.equal(page.cursor, 3); // item 1 (Heavy Armor)
+    assert.equal(page.cursor, 2); // item 1 (Heavy Armor)
 
     page.updateHover(100, 78);
-    assert.equal(page.cursor, 4); // item 2 (Shotgun / 20 shells)
+    assert.equal(page.cursor, 3); // item 2 (Shotgun / 20 shells)
   });
 
-  void test('shows purchase feedback and lets it expire after a few seconds', () => {
+  void test('shows purchase feedback below the item list and lets it expire after a few seconds', () => {
     const { engine, hud, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 0 });
 
     pressBuyMenuKey(engine);
 
-    const feedbackLabel = getBuyMenuPage().items[2];
+    const page = getBuyMenuPage();
+    const feedbackLabel = page.items.at(-1);
 
     assert.equal(feedbackLabel.visible, false);
 
@@ -255,8 +271,9 @@ void describe('buy menu as a real menu page', () => {
   });
 
   void test('customHandleInput routes 1-9 to their dedicated buy-impulse and falls back to default navigation otherwise', () => {
-    const { engine, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 0 });
+    const { engine, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 2000 });
 
+    engine.eventBus.publish('client.clientdata.field-changed', 'money', 2000, 0);
     pressBuyMenuKey(engine);
 
     const page = getBuyMenuPage();
@@ -268,6 +285,18 @@ void describe('buy menu as a real menu page', () => {
     // swallowed (which returns false here since nothing binds F1).
     assert.equal(page.handleInput(K.F1), false);
     assert.deepEqual(engine.appendedConsoleText, [`impulse ${toBuyImpulse(9)}\n`]);
+  });
+
+  void test('customHandleInput consumes the key but sends nothing for a disabled (unaffordable/unbuyable) row', () => {
+    const { engine, getBuyMenuPage } = createBuyMenuHud({ buyzone: 1, money: 0 });
+
+    pressBuyMenuKey(engine);
+
+    const page = getBuyMenuPage();
+
+    // Item 9 (Megahealth) costs 1000 -- not affordable with a 0 balance, so its row is disabled.
+    assert.equal(page.handleInput('9'.charCodeAt(0)), true);
+    assert.deepEqual(engine.appendedConsoleText, []);
   });
 
   void test('Escape closes immediately and purely locally -- nothing is sent to the server', () => {
