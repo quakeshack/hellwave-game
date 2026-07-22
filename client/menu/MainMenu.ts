@@ -4,14 +4,14 @@ import MenuCommon from './MenuCommon.ts';
 import ProfileMenu from './ProfileMenu.ts';
 
 // Lines up with the logo's own virtual x position (see #drawLogo).
-const SIDEBAR_X = 16;
+const SIDEBAR_X = 24;
 // Pushed clear of the sidebar column so the two don't visually crowd each other -- the sidebar's
 // own hit-test boundary (see build()'s layout.hitTest) is derived from this same constant.
-const SESSIONS_X = 180;
-const ROWS_START_Y = 56;
+const SESSIONS_X = 210;
+const ROWS_START_Y = 100;
 // Taller than the header font's own glyph height (16 virtual units) so sidebar rows get visible
 // breathing room instead of glyphs from adjacent rows touching.
-const ROW_SPACING = 24;
+const ROW_SPACING = 28;
 // Only drawn for session-list rows now -- sidebar items render with the header font, whose
 // hover/normal color rows already convey focus, making a separate cursor glyph redundant there.
 // A plain printable character rather than the classic special glyph codes (12/13) `VerticalLayout`
@@ -22,7 +22,14 @@ const CURSOR_MARKER = '>';
 // Target on-screen width (virtual menu-space units) for the hi-res logo -- it's a real PNG
 // (896x119), not a low-res LMP where "native size" already maps to a sane virtual footprint, so
 // it needs an explicit scale rather than the menu's usual DrawPic(x, y, pic) 1:1-native draw.
-const LOGO_VIRTUAL_WIDTH = 140;
+// Deliberately not halved along with the position constants above -- keeping it at its original
+// value is what actually makes the logo render ~2x bigger on screen (see MenuCommon.ts's
+// VIEWPORT_WIDTH/HEIGHT comment).
+const LOGO_VIRTUAL_WIDTH = 320;
+// Top margin for the logo and the player name -- horizontally, both line up with SIDEBAR_X
+// instead of their own separate margin, so the logo's left edge is flush with the sidebar below
+// it (and the name's right edge is flush with the same gutter on the other side).
+const HEADER_TOP_MARGIN = 12;
 
 // How often the main page's session list re-fetches while it's the current page. "Every few
 // seconds" per the plan; 5s balances staying current against hammering the signaling server.
@@ -53,12 +60,12 @@ export default class MainMenu {
    */
   static #drawLogo(engineAPI: ClientEngineAPI): void {
     if (hiResLogoPic === null) {
-      engineAPI.Menu.PrintWhite(16, 4, 'HELLWAVE');
+      engineAPI.Menu.PrintWhite(SIDEBAR_X, HEADER_TOP_MARGIN, 'HELLWAVE');
       return;
     }
 
-    const scale = (LOGO_VIRTUAL_WIDTH * 2) / hiResLogoPic.width;
-    const { x, y } = MenuCommon.toScreenPosition(engineAPI, 16, 4);
+    const scale = (LOGO_VIRTUAL_WIDTH * engineAPI.Menu.viewportScale) / hiResLogoPic.width;
+    const { x, y } = MenuCommon.toScreenPosition(engineAPI, SIDEBAR_X, HEADER_TOP_MARGIN);
 
     engineAPI.DrawPic(x, y, hiResLogoPic, scale);
   }
@@ -83,6 +90,7 @@ export default class MainMenu {
   static build(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, Label, MenuPage: MenuPageClass } = Menu;
+    const viewport = MenuCommon.getViewport(engineAPI);
 
     engineAPI.LoadPicFromFile('gfx/logo.png').then((texture: GLTexture): void => {
       texture.lockTextureMode('GL_LINEAR'); // smooth scaling, matches the loading-screen texture
@@ -146,7 +154,7 @@ export default class MainMenu {
           }
 
           const { x, y } = MainMenu.#rowPosition(index);
-          const xEnd = index < MainMenu.#sidebarCount ? SESSIONS_X : 320;
+          const xEnd = index < MainMenu.#sidebarCount ? SESSIONS_X : viewport.width;
 
           if (px >= x - 8 && px < xEnd && py >= y && py < y + ROW_SPACING) {
             return index;
@@ -241,10 +249,12 @@ export default class MainMenu {
         MainMenu.#drawLogo(engineAPI);
 
         const name = engineAPI.GetCvar('_cl_name')?.string ?? '';
-        Menu.PrintWhite(320 - 8 - name.length * 8, 8, name);
+        const { x, y } = viewport.anchor('top-right', name.length * 8, 8, SIDEBAR_X, HEADER_TOP_MARGIN);
+        Menu.PrintWhite(x, y, name);
 
         page.layout?.draw(page.items, page.cursor);
       },
+      viewport,
     });
 
     Menu.RegisterPage('main', mainPage);

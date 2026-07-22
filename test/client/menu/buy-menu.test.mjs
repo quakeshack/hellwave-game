@@ -237,13 +237,13 @@ void describe('buy menu as a real menu page', () => {
     // unrelated to whether it also draws its own cursor glyph.
     assert.equal(page.layout.showCursor, false);
 
-    // Row y-positions: header (y=40) + money label (y=52) -- then item 1 (y=64) and item 2
-    // (y=76), each 8 tall. The feedback label now sits below the whole list, so it doesn't
-    // shift these.
-    page.updateHover(100, 66);
+    // Row y-positions: header (y=70) + money label (y=86) -- then item 1 (y=102) and item 2
+    // (y=118), each 8 tall plus 8 spacing. The feedback label now sits below the whole list, so
+    // it doesn't shift these.
+    page.updateHover(100, 104);
     assert.equal(page.cursor, 2); // item 1 (Heavy Armor)
 
-    page.updateHover(100, 78);
+    page.updateHover(100, 120);
     assert.equal(page.cursor, 3); // item 2 (Shotgun / 20 shells)
   });
 

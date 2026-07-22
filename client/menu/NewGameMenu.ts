@@ -9,14 +9,14 @@ import MenuCommon, { LABEL_LINE_HEIGHT } from './MenuCommon.ts';
 // equals CARD_WIDTH. Map labels ("Doomed computer station") are long enough that they can
 // overflow a single line at this width -- see MenuCommon.wrapLabel -- so labels get up to two
 // lines below the card, each independently width-clamped to CARD_WIDTH.
-const CARD_WIDTH = 120;
-const CARD_GAP = 20;
-const CARDS_START_Y = 40;
+const CARD_WIDTH = 140;
+const CARD_GAP = 30;
+const CARDS_START_Y = 70;
 const CARD_LABEL_Y = CARDS_START_Y + CARD_WIDTH + 6;
 // Border drawn around the focused card, in the same light-blue the header font's hover/focused
 // row (variant 0) uses -- sampled from gfx/header-font.png so the two focus cues visually match.
 const CARD_HOVER_BORDER_COLOR = new Vector(0.733, 0.733, 0.733); // new Vector(171 / 255, 231 / 255, 255 / 255);
-const CARD_HOVER_BORDER_THICKNESS = 2;
+const CARD_HOVER_BORDER_THICKNESS = 1;
 
 /**
  * The "select a map" screen New Game leads to ('hellwave_newgame'): one card per curated map
@@ -50,10 +50,11 @@ export default class NewGameMenu {
    */
   static #drawHoverBorder(engineAPI: ClientEngineAPI, x: number, y: number, width: number, height: number): void {
     const t = CARD_HOVER_BORDER_THICKNESS;
+    const scale = engineAPI.Menu.viewportScale;
     const { x: screenX, y: screenY } = MenuCommon.toScreenPosition(engineAPI, x - t, y - t);
-    const screenWidth = (width + t * 2) * 2;
-    const screenHeight = (height + t * 2) * 2;
-    const screenThickness = t * 2;
+    const screenWidth = (width + t * 2) * scale;
+    const screenHeight = (height + t * 2) * scale;
+    const screenThickness = t * scale;
 
     engineAPI.DrawRect(screenX, screenY, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // top
     engineAPI.DrawRect(screenX, screenY + screenHeight - screenThickness, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // bottom
@@ -67,6 +68,7 @@ export default class NewGameMenu {
   static build(engineAPI: ClientEngineAPI): void {
     const { Menu } = engineAPI;
     const { Action, ListPage } = Menu;
+    const viewport = MenuCommon.getViewport(engineAPI);
 
     const maps = ServerGameAPI.GetMapList() ?? [];
 
@@ -93,7 +95,7 @@ export default class NewGameMenu {
       },
     }));
 
-    const cardsStartX = (320 - (maps.length * CARD_WIDTH + Math.max(0, maps.length - 1) * CARD_GAP)) / 2;
+    const cardsStartX = (viewport.width - (maps.length * CARD_WIDTH + Math.max(0, maps.length - 1) * CARD_GAP)) / 2;
 
     const layout = {
       draw(rowItems: MenuItem[], focusedIndex: number): void {
@@ -102,7 +104,7 @@ export default class NewGameMenu {
           const picture = NewGameMenu.#mapPictures.get(maps[index].name);
 
           if (picture) {
-            const scale = (CARD_WIDTH * 2) / picture.width;
+            const scale = (CARD_WIDTH * engineAPI.Menu.viewportScale) / picture.width;
             const { x: screenX, y: screenY } = MenuCommon.toScreenPosition(engineAPI, x, CARDS_START_Y);
             engineAPI.DrawPic(screenX, screenY, picture, scale);
           } else {
@@ -150,6 +152,7 @@ export default class NewGameMenu {
       items,
       layout,
       onEscape: () => { Menu.Pop(); },
+      viewport,
     });
 
     Menu.RegisterPage('hellwave_newgame', newGamePage);

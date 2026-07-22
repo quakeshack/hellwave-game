@@ -8,6 +8,7 @@ import { createMainMenuRig } from './fixtures.mjs';
 await import('../../../../id1/GameAPI.ts');
 
 const { default: HellwaveMenu } = await import('../../../client/menu/Menu.ts');
+const { default: MenuCommon } = await import('../../../client/menu/MenuCommon.ts');
 
 void describe('Hellwave new game map picker', () => {
   void test('registers \'hellwave_newgame\' with one card per curated map', () => {
@@ -22,11 +23,11 @@ void describe('Hellwave new game map picker', () => {
     const { getNewGamePage } = createMainMenuRig(HellwaveMenu);
     const page = getNewGamePage();
 
-    // Cards: hw_doom at x=[30,150), hw_e1m2 at x=[170,290), both y starting at 40.
-    assert.equal(page.layout.hitTest(page.items, 75, 90), 0);
-    assert.equal(page.layout.hitTest(page.items, 200, 90), 1);
-    assert.equal(page.layout.hitTest(page.items, 160, 90), null); // the gap
-    assert.equal(page.layout.hitTest(page.items, 75, 500), null); // below every card
+    // Cards: hw_doom at x=[165,305), hw_e1m2 at x=[335,475), both y starting at 70.
+    assert.equal(page.layout.hitTest(page.items, 200, 150), 0);
+    assert.equal(page.layout.hitTest(page.items, 400, 150), 1);
+    assert.equal(page.layout.hitTest(page.items, 320, 150), null); // the gap
+    assert.equal(page.layout.hitTest(page.items, 200, 900), null); // below every card
   });
 
   void test('draws a hover border around only the focused card', () => {
@@ -50,10 +51,10 @@ void describe('Hellwave new game map picker', () => {
 
   void test('long map labels wrap onto a second line instead of overflowing into the next card', () => {
     // Regression test: a real playtest found "Doomed computer station"/"Castle of the damned"
-    // (both longer than one card is wide, 15 chars/line at CARD_WIDTH=120) rendering as a single
+    // (both longer than one card is wide, 17 chars/line at CARD_WIDTH=140) rendering as a single
     // line and running together across the gap into the neighboring card's label. Both curated
     // labels need wrapping -- assert the hit region grows to cover the wrapped second label line
-    // (y=178, between the old single-line bottom at 174 and the correct two-line bottom at 182)
+    // (y=228, between the single-line bottom at 224 and the correct two-line bottom at 232)
     // instead of stopping short after only the first line's height.
     const { getNewGamePage } = createMainMenuRig(HellwaveMenu);
     const page = getNewGamePage();
@@ -62,8 +63,19 @@ void describe('Hellwave new game map picker', () => {
       assert.ok(item.label.length > 15, `expected "${item.label}" to actually need wrapping for this test to mean anything`);
     }
 
-    assert.equal(page.layout.hitTest(page.items, 75, 178), 0);
-    assert.equal(page.layout.hitTest(page.items, 200, 178), 1);
+    assert.equal(page.layout.hitTest(page.items, 200, 228), 0);
+    assert.equal(page.layout.hitTest(page.items, 400, 228), 1);
+  });
+
+  void test('MenuCommon.wrapLabel never splits a word, even when the label is much longer than two card widths', () => {
+    const maxChars = 17; // CARD_WIDTH / 8, kept in sync manually (private to NewGameMenu.ts)
+    const longLabel = 'A hypothetical label far too long to fit on a single card line';
+
+    const wrapped = MenuCommon.wrapLabel(longLabel, maxChars);
+
+    assert.equal(wrapped.length, 2);
+    assert.ok(wrapped[0].length <= maxChars);
+    assert.equal(wrapped.join(' '), longLabel);
   });
 
   void test('picking a map opens the per-map settings screen instead of starting it directly', () => {

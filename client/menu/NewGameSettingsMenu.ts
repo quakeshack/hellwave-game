@@ -10,10 +10,16 @@ import NewGameMenu from './NewGameMenu.ts';
 const ROUNDS_MIN = 2;
 const ROUNDS_MAX = 12;
 const ROUNDS_DEFAULT = 10;
-const SETTINGS_PREVIEW_X = 20;
-const SETTINGS_PREVIEW_Y = 40;
-const SETTINGS_PREVIEW_WIDTH = 80;
-const SETTINGS_FIELDS_LABEL_X = 160;
+const SETTINGS_PREVIEW_Y = 70;
+const SETTINGS_PREVIEW_WIDTH = 140;
+// Content-block sizing for centering the whole "map preview | Rounds/Private Game fields" group
+// within the page. FIELDS_COLUMN_WIDTH is the label column's own value offset (`VerticalLayout`'s
+// default `x + 116` a field without an explicit valueX draws its value at, see MenuItem.ts) plus
+// room for the widest value text ("yes"/"no"/a 2-digit round count). The block's own left edge
+// (and so previewX/fieldsLabelX) is computed in build() from the *current* viewport width, so it
+// stays centered regardless of viewport size.
+const PREVIEW_GAP = 40;
+const FIELDS_COLUMN_WIDTH = 116 + 32;
 
 /**
  * The per-map settings screen picking a card leads to ('hellwave_newgame_settings'): rounds
@@ -57,6 +63,10 @@ export default class NewGameSettingsMenu {
   static build(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, MenuPage: MenuPageClass, NumberInput, Toggle, VerticalLayout } = Menu;
+    const viewport = MenuCommon.getViewport(engineAPI);
+
+    const previewX = (viewport.width - (SETTINGS_PREVIEW_WIDTH + PREVIEW_GAP + FIELDS_COLUMN_WIDTH)) / 2;
+    const fieldsLabelX = previewX + SETTINGS_PREVIEW_WIDTH + PREVIEW_GAP;
 
     let roundsCount = ROUNDS_DEFAULT;
     let oldRoundsCount = ROUNDS_DEFAULT;
@@ -85,8 +95,8 @@ export default class NewGameSettingsMenu {
     // those two items); Start is measured (once the header font has loaded) and right-aligned
     // separately below instead of being a third stacked field -- see
     // MenuCommon.buildTrailingActionLayout.
-    const fieldsLayout = new VerticalLayout({ startY: 100, spacing: 8, labelX: SETTINGS_FIELDS_LABEL_X, cursorX: SETTINGS_FIELDS_LABEL_X - 12 });
-    const settingsLayout = MenuCommon.buildTrailingActionLayout(fieldsLayout, 2);
+    const fieldsLayout = new VerticalLayout({ startY: 170, spacing: 12, labelX: fieldsLabelX, cursorX: fieldsLabelX - 12 });
+    const settingsLayout = MenuCommon.buildTrailingActionLayout(fieldsLayout, 2, viewport);
 
     const settingsPage = new MenuPageClass({
       title: 'New Game',
@@ -101,17 +111,18 @@ export default class NewGameSettingsMenu {
         const picture = NewGameMenu.getMapPicture(NewGameMenu.getSelectedMapName());
 
         if (picture) {
-          const scale = (SETTINGS_PREVIEW_WIDTH * 2) / picture.width;
-          const { x, y } = MenuCommon.toScreenPosition(engineAPI, SETTINGS_PREVIEW_X, SETTINGS_PREVIEW_Y);
+          const scale = (SETTINGS_PREVIEW_WIDTH * engineAPI.Menu.viewportScale) / picture.width;
+          const { x, y } = MenuCommon.toScreenPosition(engineAPI, previewX, SETTINGS_PREVIEW_Y);
           engineAPI.DrawPic(x, y, picture, scale);
         }
 
         for (const [lineIndex, line] of MenuCommon.wrapLabel(NewGameMenu.getSelectedMapLabel(), Math.floor(SETTINGS_PREVIEW_WIDTH / 8)).entries()) {
-          Menu.Print(SETTINGS_PREVIEW_X, SETTINGS_PREVIEW_Y + SETTINGS_PREVIEW_WIDTH + 6 + lineIndex * LABEL_LINE_HEIGHT, line);
+          Menu.Print(previewX, SETTINGS_PREVIEW_Y + SETTINGS_PREVIEW_WIDTH + 6 + lineIndex * LABEL_LINE_HEIGHT, line);
         }
 
         page.layout?.draw(page.items, page.cursor);
       },
+      viewport,
     });
 
     startAction.action = () => {

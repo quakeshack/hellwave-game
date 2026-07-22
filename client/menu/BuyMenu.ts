@@ -4,6 +4,7 @@ import { K } from '../../../../shared/Keys.ts';
 import { formatMoney, toBuyImpulse } from '../../Defs.ts';
 import { buyMenuItems } from '../../entity/Player.ts';
 
+import MenuCommon from './MenuCommon.ts';
 import type HellwaveHUD from '../HUD.ts';
 
 // How long purchase feedback (e.g. "bought Heavy Armor!") stays visible before fading, ticked
@@ -12,9 +13,10 @@ const FEEDBACK_DURATION_SECONDS = 3.0;
 
 // Buy-menu row layout, shared between the `VerticalLayout` config and the focus-marker
 // `customDraw` below so the two stay in sync.
-const BUY_MENU_START_Y = 40;
-const BUY_MENU_SPACING = 4;
-const BUY_MENU_CURSOR_X = 24;
+const BUY_MENU_START_Y = 70;
+const BUY_MENU_SPACING = 8;
+const BUY_MENU_CURSOR_X = 40;
+const BUY_MENU_LABEL_X = 70;
 
 /**
  * The hellwave buy menu ('hellwave_buy'), a real `MenuPage` on the stack rather than a manually
@@ -56,6 +58,7 @@ export default class HellwaveBuyMenu {
    */
   register(): void {
     const { Action, Label, MenuPage: MenuPageClass, VerticalLayout } = this.#engine.Menu;
+    const viewport = MenuCommon.getViewport(this.#engine);
 
     this.#moneyLabel = new Label({ label: '' });
     this.#feedbackLabel = new Label({ label: '', visible: false });
@@ -82,7 +85,7 @@ export default class HellwaveBuyMenu {
       // The built-in blinking cursor glyph is drawn via `customDraw` below instead -- see there
       // for why.
       layout: new VerticalLayout({
-        startY: BUY_MENU_START_Y, spacing: BUY_MENU_SPACING, labelX: 40, cursorX: BUY_MENU_CURSOR_X, showCursor: false,
+        startY: BUY_MENU_START_Y, spacing: BUY_MENU_SPACING, labelX: BUY_MENU_LABEL_X, cursorX: BUY_MENU_CURSOR_X, showCursor: false,
       }),
       items,
       // Hellwave is always coop-shaped, even solo -- other players, monsters, and the round
@@ -134,6 +137,7 @@ export default class HellwaveBuyMenu {
 
         return defaultHandleInput(key);
       },
+      viewport,
     });
 
     this.#engine.Menu.RegisterPage('hellwave_buy', page);

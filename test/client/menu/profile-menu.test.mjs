@@ -102,12 +102,13 @@ void describe('Hellwave profile page', () => {
 
     await Promise.resolve(); // flush LoadBitmapFont's promise, so Accept is measured with the real font
 
-    assert.equal(page.layout.hitTest(page.items, 100, 48), 0); // Name field row (startY=48)
-    assert.equal(page.layout.hitTest(page.items, 100, 72), 1); // Vest field row
-    assert.equal(page.layout.hitTest(page.items, 100, 96), 2); // Pants field row
-    // "Accept" is 6 chars * 14px (mock cellWidth) = 84px wide, right edge x=304.
-    assert.equal(page.layout.hitTest(page.items, 260, 220), 3); // Accept, bottom-right corner
-    assert.equal(page.layout.hitTest(page.items, 50, 220), null); // left of Accept's column
-    assert.equal(page.layout.hitTest(page.items, 260, 160), null); // above Accept's row
+    // Field rows no longer care about px (the whole row width is clickable) -- only py matters.
+    assert.equal(page.layout.hitTest(page.items, 999, 110), 0); // Name field row (startY=100, 24 tall)
+    assert.equal(page.layout.hitTest(page.items, 999, 132), 1); // Vest field row (24 tall)
+    assert.equal(page.layout.hitTest(page.items, 999, 160), 2); // Pants field row (36 tall)
+    // "Accept" is 6 chars * 14px (mock cellWidth) = 84px wide, right/bottom edges at (632, 352).
+    assert.equal(page.layout.hitTest(page.items, 590, 344), 3); // Accept, bottom-right corner
+    assert.equal(page.layout.hitTest(page.items, 500, 344), null); // left of Accept's column
+    assert.equal(page.layout.hitTest(page.items, 590, 50), null); // above Accept's row
   });
 });

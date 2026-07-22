@@ -7,6 +7,30 @@ import MenuCommon, { HEADER_FONT_GLYPH_HEIGHT } from './MenuCommon.ts';
 const PROFILE_CONFIRMED_CVAR = 'hw_profile_confirmed';
 const DEFAULT_ACCEPT_LABEL = 'Accept';
 
+// Matches id1's multiplayer setup page's layout (see id1/client/Menu.ts's
+// #buildMultiplayerPage): the name field's own input box and the bigbox/menuplyr preview share
+// the same X column -- bigbox (72 wide) sits narrower than the name box (144 wide for a 16-cell
+// textbox) at the same left edge, so the two don't need separate horizontal tuning to avoid
+// colliding. FIELDS_START_Y is the Name/Vest/Pants column's own startY (kept in sync manually
+// with the VerticalLayout config below); PREVIEW_Y mirrors id1's "8 units below the row start"
+// relationship (its bigbox sits at rowY + 8).
+const FIELDS_START_Y = 100;
+const PREVIEW_Y = FIELDS_START_Y + 8;
+// Content-block sizing for centering the whole "labels | name box" group within the page --
+// LABEL_COLUMN_WIDTH is generous room for "Name"/"Vest"/"Pants", BOX_WIDTH matches the name
+// textbox's own rendered width (16-cell box: 16 * 8 + 16, see M.DrawTextBox's tile math), and the
+// gap between them is deliberate breathing room, not derived from anything else. The block's own
+// left edge (and so labelX/previewX) is computed in build() from the *current* viewport width,
+// so it stays centered regardless of viewport size.
+const LABEL_COLUMN_WIDTH = 40;
+const FIELD_GAP = 40;
+const BOX_WIDTH = 144;
+// menuplyr's fixed position *within* bigbox's own artwork (a 48x56 sprite centered inside a
+// 72x72 frame, 12px side borders and 8px top/bottom borders) -- an intrinsic property of the two
+// assets, not a layout choice, so it must stay exactly this regardless of viewport/scale.
+const MENUPLYR_OFFSET_X = 12;
+const MENUPLYR_OFFSET_Y = 8;
+
 let bigboxPic: MenuPic = null!;
 let menuplyrPic: MenuPic = null!;
 
@@ -45,6 +69,10 @@ export default class ProfileMenu {
   static build(engineAPI: ClientEngineAPI): Action[] {
     const { Menu } = engineAPI;
     const { Action, ColorPicker, MenuPage: MenuPageClass, Textbox, VerticalLayout } = Menu;
+    const viewport = MenuCommon.getViewport(engineAPI);
+
+    const labelX = (viewport.width - (LABEL_COLUMN_WIDTH + FIELD_GAP + BOX_WIDTH)) / 2;
+    const previewX = labelX + LABEL_COLUMN_WIDTH + FIELD_GAP;
 
     engineAPI.RegisterCvar(
       PROFILE_CONFIRMED_CVAR, '0', cvarFlags.ARCHIVE,
@@ -79,14 +107,13 @@ export default class ProfileMenu {
           return;
         }
 
-        const boxX = 160;
         Menu.Print(x, y, textbox.label);
-        Menu.DrawTextBox(boxX, y - 8, textbox.width, 1);
-        Menu.PrintWhite(boxX + 8, y, textbox.getValue());
+        Menu.DrawTextBox(previewX, y - 8, textbox.width, 1);
+        Menu.PrintWhite(previewX + 8, y, textbox.getValue());
 
         const glyph = textbox.getCursorGlyph();
         if (glyph !== null) {
-          Menu.DrawCharacter(boxX + 8 + textbox.cursorPos * 8, y, glyph);
+          Menu.DrawCharacter(previewX + 8 + textbox.cursorPos * 8, y, glyph);
         }
       },
     });
@@ -97,8 +124,8 @@ export default class ProfileMenu {
     // items); Accept/Continue is styled and positioned like the New Game settings page's Start
     // button -- same shared bottom-right corner -- instead of stacking as a fourth field. See
     // MenuCommon.buildTrailingActionLayout.
-    const fieldsLayout = new VerticalLayout({ startY: 48, spacing: 0, labelX: 64, cursorX: 56 });
-    const profileLayout = MenuCommon.buildTrailingActionLayout(fieldsLayout, 3);
+    const fieldsLayout = new VerticalLayout({ startY: FIELDS_START_Y, spacing: 0, labelX, cursorX: labelX - 15 });
+    const profileLayout = MenuCommon.buildTrailingActionLayout(fieldsLayout, 3, viewport);
 
     const profilePage = new MenuPageClass({
       layout: profileLayout,
@@ -119,13 +146,14 @@ export default class ProfileMenu {
       customDraw: (page) => {
         page.layout?.draw(page.items, page.cursor);
 
-        Menu.DrawPic(160, 56, bigboxPic);
+        Menu.DrawPic(previewX, PREVIEW_Y, bigboxPic);
         Menu.DrawPicTranslate(
-          172, 64, menuplyrPic,
+          previewX + MENUPLYR_OFFSET_X, PREVIEW_Y + MENUPLYR_OFFSET_Y, menuplyrPic,
           (top << 4) + (top >= 8 ? 4 : 11),
           (bottom << 4) + (bottom >= 8 ? 4 : 11),
         );
       },
+      viewport,
     });
 
     acceptAction.action = () => {

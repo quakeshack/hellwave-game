@@ -82,16 +82,16 @@ void describe('Hellwave main menu', () => {
     const { getMainPage } = createMainMenuRig(HellwaveMenu);
     const page = getMainPage();
 
-    // Row y-positions: New Game (y=56), Profile (y=80), Options (y=104), Quit (y=128), each 24 tall.
+    // Row y-positions: New Game (y=100), Profile (y=128), Options (y=156), Quit (y=184), each 28 tall.
     // This is what actually fixes the "hover doesn't move the cursor on the main menu" bug -- the
     // previous implementation had no real `layout`/`items` for `updateHover()` to resolve against.
-    page.updateHover(30, 110);
+    page.updateHover(60, 165);
     assert.equal(page.cursor, 2); // Options
 
-    page.updateHover(30, 80);
+    page.updateHover(60, 135);
     assert.equal(page.cursor, 1); // Profile
 
-    page.updateHover(30, 128);
+    page.updateHover(60, 190);
     assert.equal(page.cursor, 3); // Quit
   });
 
@@ -99,10 +99,10 @@ void describe('Hellwave main menu', () => {
     const { getMainPage } = createMainMenuRig(HellwaveMenu);
     const page = getMainPage();
 
-    assert.equal(page.layout.hitTest(page.items, 30, 56), 0); // New Game
-    assert.equal(page.layout.hitTest(page.items, 30, 128), 3); // Quit
-    assert.equal(page.layout.hitTest(page.items, 200, 56), null); // session column, nothing there yet
-    assert.equal(page.layout.hitTest(page.items, 30, 500), null); // below every row
+    assert.equal(page.layout.hitTest(page.items, 60, 100), 0); // New Game
+    assert.equal(page.layout.hitTest(page.items, 60, 190), 3); // Quit
+    assert.equal(page.layout.hitTest(page.items, 250, 100), null); // session column, nothing there yet
+    assert.equal(page.layout.hitTest(page.items, 60, 900), null); // below every row
   });
 
   void test('Escape closes the menu', () => {

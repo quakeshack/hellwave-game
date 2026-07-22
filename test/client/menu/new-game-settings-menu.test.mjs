@@ -155,10 +155,12 @@ void describe('Hellwave new game settings', () => {
 
     await Promise.resolve(); // flush LoadBitmapFont's promise, so Start is measured with the real font
 
-    assert.equal(page.layout.hitTest(page.items, 200, 100), 0); // Rounds field row (startY=100)
-    assert.equal(page.layout.hitTest(page.items, 200, 116), 1); // Private Game field row
-    assert.equal(page.layout.hitTest(page.items, 280, 230), 2); // Start, bottom-right corner (right edge x=304, y=224)
-    assert.equal(page.layout.hitTest(page.items, 200, 230), null); // left of Start's column
-    assert.equal(page.layout.hitTest(page.items, 280, 160), null); // above Start's row
+    // Field rows no longer care about px (the whole row width is clickable) -- only py matters.
+    assert.equal(page.layout.hitTest(page.items, 999, 174), 0); // Rounds field row (startY=170)
+    assert.equal(page.layout.hitTest(page.items, 999, 194), 1); // Private Game field row
+    // "Start!" is 6 chars * 14px (mock cellWidth) = 84px wide, right/bottom edges at (632, 352).
+    assert.equal(page.layout.hitTest(page.items, 590, 344), 2); // Start, bottom-right corner
+    assert.equal(page.layout.hitTest(page.items, 500, 344), null); // left of Start's column
+    assert.equal(page.layout.hitTest(page.items, 590, 100), null); // above Start's row
   });
 });
