@@ -117,7 +117,8 @@ export default class NewGameSettingsMenu {
         }
 
         for (const [lineIndex, line] of MenuCommon.wrapLabel(NewGameMenu.getSelectedMapLabel(), Math.floor(SETTINGS_PREVIEW_WIDTH / 8)).entries()) {
-          Menu.Print(previewX, SETTINGS_PREVIEW_Y + SETTINGS_PREVIEW_WIDTH + 6 + lineIndex * LABEL_LINE_HEIGHT, line);
+          const labelX = MenuCommon.centerX(previewX, SETTINGS_PREVIEW_WIDTH, line.length * 8);
+          Menu.Print(labelX, SETTINGS_PREVIEW_Y + SETTINGS_PREVIEW_WIDTH + 6 + lineIndex * LABEL_LINE_HEIGHT, line);
         }
 
         page.layout?.draw(page.items, page.cursor);

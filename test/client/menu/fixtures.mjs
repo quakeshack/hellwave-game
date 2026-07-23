@@ -1,4 +1,6 @@
-import { createMockClientEngine, createMockMenuAPI } from '../../../../id1/test/client/fixtures.ts';
+import { createMockClientEngine, createMockMenuAPI, createMockSessionsChannel } from '../../../../id1/test/client/fixtures.ts';
+
+export { createMockSessionsChannel };
 
 /**
  * Create a rig for `HellwaveMenu`, capturing the registered `'main'`/`'hellwave_profile'`/
@@ -63,47 +65,4 @@ export function createMainMenuRig(HellwaveMenu, engineOverrides = {}) {
     getNewGamePage: () => newGamePage,
     getNewGameSettingsPage: () => newGameSettingsPage,
   };
-}
-
-/**
- * Temporarily replace the global `setInterval`/`clearInterval` with instrumented stand-ins that
- * record every call and let a test manually fire a captured callback instead of waiting for a
- * real interval -- used to test the main page's session-list polling deterministically. `callback`
- * may be async; it's awaited before the real timers are restored.
- * @param {(rig: { intervals: Array<{ fn: () => void, ms: number, cleared: boolean }>, tick: (handle: object) => void }) => unknown} callback Test callback, given `{ intervals, tick }`.
- * @returns {Promise<void>} Resolves once `callback` (and timer restoration) completes.
- */
-export async function withMockTimers(callback) {
-  const originalSetInterval = globalThis.setInterval;
-  const originalClearInterval = globalThis.clearInterval;
-  const intervals = [];
-
-  globalThis.setInterval = (fn, ms) => {
-    const handle = { fn, ms, cleared: false };
-    intervals.push(handle);
-    return handle;
-  };
-  globalThis.clearInterval = (handle) => {
-    if (handle) {
-      handle.cleared = true;
-    }
-  };
-
-  try {
-    await callback({
-      intervals,
-      tick(handle) {
-        if (!handle.cleared) {
-          handle.fn();
-        }
-      },
-    });
-  } finally {
-    // The awaited callback above has already fully settled by this point -- nothing else in
-    // this synchronous process could have reassigned these globals in between.
-    // eslint-disable-next-line require-atomic-updates
-    globalThis.setInterval = originalSetInterval;
-    // eslint-disable-next-line require-atomic-updates
-    globalThis.clearInterval = originalClearInterval;
-  }
 }

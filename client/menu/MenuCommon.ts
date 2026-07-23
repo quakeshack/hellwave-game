@@ -1,5 +1,7 @@
 import type { BitmapFont, ClientEngineAPI, MenuItem, MenuViewport } from '../../../../shared/GameInterfaces.ts';
 
+import Vector from '../../../../shared/Vector.ts';
+
 // Generic wrapped small-text line height (virtual menu-space units) -- shared by the map picker's
 // card labels (NewGameMenu) and the new-game settings screen's selected-map label
 // (NewGameSettingsMenu), both of which reuse MenuCommon.wrapLabel.
@@ -34,6 +36,12 @@ export const VIEWPORT_HEIGHT = 360;
 // corner. Position itself is derived per page via `MenuCommon.getViewport(engineAPI).anchor(...)`
 // instead of a hand-tuned absolute constant.
 const BOTTOM_RIGHT_BUTTON_MARGIN = 8;
+
+// Focused-item hover border -- shared by the map picker's cards (NewGameMenu) and the main menu's
+// session rows (MainMenu). Sampled from gfx/header-font.png's hover/focused row (variant 0) so the
+// two focus cues visually match.
+const HOVER_BORDER_COLOR = new Vector(0.733, 0.733, 0.733); // new Vector(171 / 255, 231 / 255, 255 / 255);
+const HOVER_BORDER_THICKNESS = 1;
 
 /**
  * The shape `MenuPage.layout` expects (draw/hit-test against a page's `items`) -- declared
@@ -87,6 +95,25 @@ export default class MenuCommon {
   }
 
   /**
+   * Draw a hollow border (four thin filled rects, not a filled box) around a virtual-space
+   * rectangle -- used to highlight the focused map card or session row in place of a text cursor
+   * glyph.
+   */
+  static drawHoverBorder(engineAPI: ClientEngineAPI, x: number, y: number, width: number, height: number): void {
+    const t = HOVER_BORDER_THICKNESS;
+    const scale = engineAPI.Menu.viewportScale;
+    const { x: screenX, y: screenY } = MenuCommon.toScreenPosition(engineAPI, x - t, y - t);
+    const screenWidth = (width + t * 2) * scale;
+    const screenHeight = (height + t * 2) * scale;
+    const screenThickness = t * scale;
+
+    engineAPI.DrawRect(screenX, screenY, screenWidth, screenThickness, HOVER_BORDER_COLOR); // top
+    engineAPI.DrawRect(screenX, screenY + screenHeight - screenThickness, screenWidth, screenThickness, HOVER_BORDER_COLOR); // bottom
+    engineAPI.DrawRect(screenX, screenY, screenThickness, screenHeight, HOVER_BORDER_COLOR); // left
+    engineAPI.DrawRect(screenX + screenWidth - screenThickness, screenY, screenThickness, screenHeight, HOVER_BORDER_COLOR); // right
+  }
+
+  /**
    * Greedily wrap `label` onto up to two lines, each clamped to `maxChars` -- map labels
    * ("Doomed computer station") can be longer than a single card is wide.
    * @returns One or two lines, each at most `maxChars` long.
@@ -108,6 +135,16 @@ export default class MenuCommon {
     const secondLine = words.slice(index).join(' ');
 
     return secondLine ? [line, secondLine] : [line];
+  }
+
+  /**
+   * Center content of `contentWidth` within a container of `containerWidth` starting at
+   * `containerX` -- used to center a wrapped label line under a fixed-width picture (the map
+   * picker's cards, the new-game settings screen's preview), so both pages align the same way.
+   * @returns The content's left-edge x, never left of the container's own left edge.
+   */
+  static centerX(containerX: number, containerWidth: number, contentWidth: number): number {
+    return containerX + Math.max(0, (containerWidth - contentWidth) / 2);
   }
 
   /**

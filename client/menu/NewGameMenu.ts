@@ -1,6 +1,5 @@
 import type { ClientEngineAPI, GLTexture, MenuItem } from '../../../../shared/GameInterfaces.ts';
 
-import Vector from '../../../../shared/Vector.ts';
 import { ServerGameAPI } from '../../GameAPI.ts';
 
 import MenuCommon, { LABEL_LINE_HEIGHT } from './MenuCommon.ts';
@@ -13,10 +12,6 @@ const CARD_WIDTH = 140;
 const CARD_GAP = 30;
 const CARDS_START_Y = 70;
 const CARD_LABEL_Y = CARDS_START_Y + CARD_WIDTH + 6;
-// Border drawn around the focused card, in the same light-blue the header font's hover/focused
-// row (variant 0) uses -- sampled from gfx/header-font.png so the two focus cues visually match.
-const CARD_HOVER_BORDER_COLOR = new Vector(0.733, 0.733, 0.733); // new Vector(171 / 255, 231 / 255, 255 / 255);
-const CARD_HOVER_BORDER_THICKNESS = 1;
 
 /**
  * The "select a map" screen New Game leads to ('hellwave_newgame'): one card per curated map
@@ -42,24 +37,6 @@ export default class NewGameMenu {
 
   static getMapPicture(name: string): GLTexture | undefined {
     return NewGameMenu.#mapPictures.get(name);
-  }
-
-  /**
-   * Draw a hollow border (four thin filled rects, not a filled box) around a virtual-space
-   * rectangle -- used to highlight the focused map card.
-   */
-  static #drawHoverBorder(engineAPI: ClientEngineAPI, x: number, y: number, width: number, height: number): void {
-    const t = CARD_HOVER_BORDER_THICKNESS;
-    const scale = engineAPI.Menu.viewportScale;
-    const { x: screenX, y: screenY } = MenuCommon.toScreenPosition(engineAPI, x - t, y - t);
-    const screenWidth = (width + t * 2) * scale;
-    const screenHeight = (height + t * 2) * scale;
-    const screenThickness = t * scale;
-
-    engineAPI.DrawRect(screenX, screenY, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // top
-    engineAPI.DrawRect(screenX, screenY + screenHeight - screenThickness, screenWidth, screenThickness, CARD_HOVER_BORDER_COLOR); // bottom
-    engineAPI.DrawRect(screenX, screenY, screenThickness, screenHeight, CARD_HOVER_BORDER_COLOR); // left
-    engineAPI.DrawRect(screenX + screenWidth - screenThickness, screenY, screenThickness, screenHeight, CARD_HOVER_BORDER_COLOR); // right
   }
 
   /**
@@ -112,12 +89,12 @@ export default class NewGameMenu {
           }
 
           if (index === focusedIndex) {
-            NewGameMenu.#drawHoverBorder(engineAPI, x, CARDS_START_Y, CARD_WIDTH, CARD_WIDTH);
+            MenuCommon.drawHoverBorder(engineAPI, x, CARDS_START_Y, CARD_WIDTH, CARD_WIDTH);
           }
 
           const lines = MenuCommon.wrapLabel(item.label, Math.floor(CARD_WIDTH / 8));
           lines.forEach((line, lineIndex) => {
-            const labelX = x + Math.max(0, (CARD_WIDTH - line.length * 8) / 2);
+            const labelX = MenuCommon.centerX(x, CARD_WIDTH, line.length * 8);
             const labelY = CARD_LABEL_Y + lineIndex * LABEL_LINE_HEIGHT;
 
             if (index === focusedIndex) {

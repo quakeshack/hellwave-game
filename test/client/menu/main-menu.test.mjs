@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { K } from '../../../../../shared/Keys.ts';
-import { createMainMenuRig, withMockTimers } from './fixtures.mjs';
+import { createMainMenuRig, createMockSessionsChannel } from './fixtures.mjs';
 
 await import('../../../../id1/GameAPI.ts');
 
@@ -119,63 +119,64 @@ void describe('Hellwave main menu', () => {
 });
 
 void describe('Hellwave live session list', () => {
-  void test('onEnter fetches sessions immediately and shows one row per session', async () => {
+  void test('onEnter subscribes and shows one row per session', () => {
+    // hw_doom carries round settings, hw_e1m2 has none -- covers both branches of the round
+    // line's presence check without needing a dedicated test (row content only differs in
+    // what layout.draw() prints, which isn't observable through .label, see the file-level
+    // comment on the map-fallback test below for why draw-level assertions aren't used here).
+    const channel = createMockSessionsChannel([
+      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 2, maxPlayers: 4, settings: { hw_rounds: '12', hw_round_current: '3' } },
+      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} },
+    ]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: {
-        ListSessions: () => Promise.resolve([
-          { sessionId: 'abc', map: 'hw_doom', currentPlayers: 2, maxPlayers: 4 },
-          { sessionId: 'def', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4 },
-        ]),
-      },
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
 
     engine.Menu.Push('main');
-    await Promise.resolve();
-    await Promise.resolve();
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), [
-      'hw_doom [2/4]',
-      'hw_e1m2 [1/4]',
+      'Doomed computer station [2/4]',
+      'Castle of the damned [1/4]',
     ]);
 
     engine.Menu.Pop();
   });
 
-  void test('shows "No active games." when the list is empty', async () => {
-    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu); // default mock resolves []
+  void test('shows "No active games." when the list is empty', () => {
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu); // default mock delivers []
 
     engine.Menu.Push('main');
-    await Promise.resolve();
-    await Promise.resolve();
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['No active games.']);
 
     engine.Menu.Pop();
   });
 
-  void test('shows "Game lobby error." when the fetch rejects', async () => {
+  void test('shows "Game lobby error." when the channel reports reconnecting', () => {
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: { ListSessions: () => Promise.reject(new Error('network down')) },
+      Multiplayer: {
+        SubscribeSessions: (_onSessions, onStatus) => {
+          onStatus?.('reconnecting');
+          return () => {};
+        },
+      },
     });
 
     engine.Menu.Push('main');
-    await Promise.resolve();
-    await Promise.resolve();
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Game lobby error.']);
 
     engine.Menu.Pop();
   });
 
-  void test('joining a session connects and closes the menu once a profile is confirmed', async () => {
+  void test('joining a session connects and closes the menu once a profile is confirmed', () => {
+    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: { ListSessions: () => Promise.resolve([{ sessionId: 'abc', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]) },
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
     engine.SetCvar('hw_profile_confirmed', '1');
 
     engine.Menu.Push('main');
-    await Promise.resolve();
-    await Promise.resolve();
 
     getMainPage().items[4].action();
 
@@ -183,14 +184,13 @@ void describe('Hellwave live session list', () => {
     assert.equal(engine.Menu.IsOpen(), false); // Menu.Close(), same as id1's launch_server join
   });
 
-  void test('joining a session opens the profile gate first when unconfirmed, and accepting connects', async () => {
+  void test('joining a session opens the profile gate first when unconfirmed, and accepting connects', () => {
+    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
     const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: { ListSessions: () => Promise.resolve([{ sessionId: 'abc', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]) },
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
 
     engine.Menu.Push('main');
-    await Promise.resolve();
-    await Promise.resolve();
 
     getMainPage().items[4].action(); // Join -- no profile confirmed yet
 
@@ -205,82 +205,98 @@ void describe('Hellwave live session list', () => {
     assert.equal(engine.Menu.IsOpen(), false);
   });
 
-  void test('polls for fresh sessions on an interval while showing, and stops once the page exits', async () => {
-    let callCount = 0;
+  void test('receives live session updates while showing, and stops once the page exits', () => {
+    const channel = createMockSessionsChannel([{ sessionId: 'first', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: {
-        ListSessions: () => {
-          callCount++;
-          return Promise.resolve(callCount === 1
-            ? [{ sessionId: 'first', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4 }]
-            : [{ sessionId: 'second', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4 }]);
-        },
-      },
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
 
-    await withMockTimers(async ({ intervals, tick }) => {
-      engine.Menu.Push('main');
-      await Promise.resolve();
-      await Promise.resolve();
+    engine.Menu.Push('main');
 
-      assert.equal(callCount, 1);
-      assert.equal(intervals.length, 1);
-      assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['hw_doom [1/4]']);
+    assert.equal(channel.activeSubscriberCount, 1);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Doomed computer station [1/4]']);
 
-      tick(intervals[0]);
-      await Promise.resolve();
-      await Promise.resolve();
+    // Simulates a live server-added/server-updated diff arriving over the channel -- no timer or
+    // fetch involved, just the next push.
+    channel.push([{ sessionId: 'second', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4, settings: {} }]);
 
-      assert.equal(callCount, 2);
-      assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['hw_e1m2 [2/4]']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4]']);
 
-      engine.Menu.Pop(); // onExit -- must clear the interval
+    engine.Menu.Pop(); // onExit -- must unsubscribe
 
-      assert.equal(intervals[0].cleared, true);
+    assert.equal(channel.activeSubscriberCount, 0);
 
-      tick(intervals[0]); // tick() itself checks .cleared and no-ops
-      await Promise.resolve();
+    // A push after leaving must not reach this page's now-torn-down listener.
+    channel.push([{ sessionId: 'third', hostname: 'Carol\'s Server', map: 'hw_doom', currentPlayers: 3, maxPlayers: 4, settings: {} }]);
 
-      assert.equal(callCount, 2); // unchanged
-    });
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4]']);
   });
 
-  void test('skips a poll tick while the previous fetch is still in flight, instead of racing it', async () => {
-    let resolveFirstFetch;
-    let fetchCallCount = 0;
-    const { engine } = createMainMenuRig(HellwaveMenu, {
-      Multiplayer: {
-        ListSessions: () => {
-          fetchCallCount++;
-          if (fetchCallCount === 1) {
-            return new Promise((resolve) => { resolveFirstFetch = resolve; });
-          }
-          return Promise.resolve([]);
-        },
-      },
+  void test('carries the session\'s map name through to the row even when it is outside the curated list', () => {
+    // Thumbnail *rendering* can't be unit-tested here -- Action.draw()/M.DrawBitmapString reach
+    // for the engine's real M singleton, not the mocked engineAPI (confirmed by the identical
+    // gap in NewGameMenu's own map-picture tests) -- so this only covers that an uncurated map
+    // name doesn't break row creation, which is what a missing thumbnail cache entry could do if
+    // the lookup weren't null-safe. Actual thumbnail draw behavior is manually verified live.
+    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'some_future_map', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
 
-    await withMockTimers(async ({ intervals, tick }) => {
-      engine.Menu.Push('main');
-      await Promise.resolve(); // onEnter's immediate refresh starts, but its fetch never resolves yet
+    engine.Menu.Push('main');
 
-      assert.equal(fetchCallCount, 1);
+    assert.equal(getMainPage().items[4].label, 'some_future_map [1/4]');
 
-      tick(intervals[0]); // a poll tick while the first fetch is still pending
-      await Promise.resolve();
+    engine.Menu.Pop();
+  });
 
-      assert.equal(fetchCallCount, 1); // skipped -- sessionRefreshInFlight guard
-
-      resolveFirstFetch([]);
-      await Promise.resolve();
-      await Promise.resolve();
-
-      tick(intervals[0]); // now the guard is clear again
-      await Promise.resolve();
-
-      assert.equal(fetchCallCount, 2);
-
-      engine.Menu.Pop();
+  void test('a very long hostname does not break row creation', () => {
+    // Truncation itself happens inside MainMenu's per-frame draw() (a plain Menu.Print call, not
+    // observable through .label the way thumbnail/round-line rendering also isn't -- see the
+    // file-level comment on the map-fallback test above). This only guards against the slicing
+    // logic throwing (e.g. an off-by-one) when fed something far longer than any real hostname;
+    // the actual truncated/rendered text is manually verified live.
+    const channel = createMockSessionsChannel([{
+      sessionId: 'abc',
+      hostname: 'A'.repeat(200),
+      map: 'hw_doom',
+      currentPlayers: 1,
+      maxPlayers: 4,
+      settings: {},
+    }]);
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
+
+    engine.Menu.Push('main');
+
+    assert.equal(getMainPage().items[4].label, 'Doomed computer station [1/4]');
+
+    engine.Menu.Pop();
+  });
+
+  void test('layout.hitTest resolves session rows using the taller row spacing, including over the thumbnail', () => {
+    const channel = createMockSessionsChannel([
+      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} },
+      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} },
+    ]);
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
+    });
+
+    engine.Menu.Push('main');
+
+    const page = getMainPage();
+
+    // Row 0 spans y=[100, 152) -- y=145 is past the old 28-tall sidebar spacing's boundary
+    // (100+28=128), proving the session column's row height actually grew.
+    assert.equal(page.layout.hitTest(page.items, 215, 145), 4);
+    // x=212 is inside the 20-wide thumbnail (SESSIONS_X=210), left of where the label itself
+    // starts -- confirms the hit region still covers the thumbnail area.
+    assert.equal(page.layout.hitTest(page.items, 212, 145), 4);
+    assert.equal(page.layout.hitTest(page.items, 215, 155), 5); // row 1, y=[152, 204)
+    assert.equal(page.layout.hitTest(page.items, 215, 300), null); // below every row
+
+    engine.Menu.Pop();
   });
 });

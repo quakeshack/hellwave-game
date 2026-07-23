@@ -49,6 +49,7 @@ function createStaticCvars(overrides = {}) {
     deathmatch: createMockCvar(0),
     coop: createMockCvar(0),
     rounds: createMockCvar(12),
+    roundCurrent: createMockCvar(0),
     quiettime: createMockCvar(15),
     normaltime: createMockCvar(90),
     maxmonstersalive: createMockCvar(20),

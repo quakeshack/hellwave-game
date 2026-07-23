@@ -78,6 +78,12 @@ void describe('Hellwave new game map picker', () => {
     assert.equal(wrapped.join(' '), longLabel);
   });
 
+  void test('MenuCommon.centerX centers content within a container and never goes left of it', () => {
+    assert.equal(MenuCommon.centerX(100, 140, 80), 130); // (140-80)/2 = 30 inset
+    assert.equal(MenuCommon.centerX(100, 140, 140), 100); // exact fit, no inset
+    assert.equal(MenuCommon.centerX(100, 140, 200), 100); // content wider than container -- clamped, not negative
+  });
+
   void test('picking a map opens the per-map settings screen instead of starting it directly', () => {
     const { calls, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
 
