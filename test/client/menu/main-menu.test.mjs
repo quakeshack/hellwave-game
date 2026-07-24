@@ -135,8 +135,8 @@ void describe('Hellwave live session list', () => {
     engine.Menu.Push('main');
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), [
-      'Doomed computer station [2/4]',
-      'Castle of the damned [1/4]',
+      'Doomed computer station [2/4] --',
+      'Castle of the damned [1/4] --',
     ]);
 
     engine.Menu.Pop();
@@ -214,13 +214,13 @@ void describe('Hellwave live session list', () => {
     engine.Menu.Push('main');
 
     assert.equal(channel.activeSubscriberCount, 1);
-    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Doomed computer station [1/4]']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Doomed computer station [1/4] --']);
 
     // Simulates a live server-added/server-updated diff arriving over the channel -- no timer or
     // fetch involved, just the next push.
     channel.push([{ sessionId: 'second', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4, settings: {} }]);
 
-    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4]']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4] --']);
 
     engine.Menu.Pop(); // onExit -- must unsubscribe
 
@@ -229,7 +229,7 @@ void describe('Hellwave live session list', () => {
     // A push after leaving must not reach this page's now-torn-down listener.
     channel.push([{ sessionId: 'third', hostname: 'Carol\'s Server', map: 'hw_doom', currentPlayers: 3, maxPlayers: 4, settings: {} }]);
 
-    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4]']);
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4] --']);
   });
 
   void test('carries the session\'s map name through to the row even when it is outside the curated list', () => {
@@ -245,7 +245,7 @@ void describe('Hellwave live session list', () => {
 
     engine.Menu.Push('main');
 
-    assert.equal(getMainPage().items[4].label, 'some_future_map [1/4]');
+    assert.equal(getMainPage().items[4].label, 'some_future_map [1/4] --');
 
     engine.Menu.Pop();
   });
@@ -270,7 +270,7 @@ void describe('Hellwave live session list', () => {
 
     engine.Menu.Push('main');
 
-    assert.equal(getMainPage().items[4].label, 'Doomed computer station [1/4]');
+    assert.equal(getMainPage().items[4].label, 'Doomed computer station [1/4] --');
 
     engine.Menu.Pop();
   });
@@ -296,6 +296,29 @@ void describe('Hellwave live session list', () => {
     assert.equal(page.layout.hitTest(page.items, 212, 145), 4);
     assert.equal(page.layout.hitTest(page.items, 215, 155), 5); // row 1, y=[152, 204)
     assert.equal(page.layout.hitTest(page.items, 215, 300), null); // below every row
+
+    engine.Menu.Pop();
+  });
+
+  void test('shows a numeric ping, and "N/A" once a probe confirms a host is unreachable', () => {
+    // Coverage for plans/session-ping-latency.md Phase 4 -- rows render whatever ping/
+    // pingUnreachable SessionDiscovery already computed (never re-sorted or re-derived here, see
+    // rebuildSessionRows's own comment); "still probing" (absent ping) is already covered by every
+    // other test in this file via its "--" suffix.
+    const channel = createMockSessionsChannel([
+      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: 42, pingUnreachable: false },
+      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: null, pingUnreachable: true },
+    ]);
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
+    });
+
+    engine.Menu.Push('main');
+
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), [
+      'Doomed computer station [1/4] 42ms',
+      'Castle of the damned [1/4] N/A',
+    ]);
 
     engine.Menu.Pop();
   });

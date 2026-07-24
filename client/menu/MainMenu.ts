@@ -128,6 +128,29 @@ export default class MainMenu {
   }
 
   /**
+   * Formats a session's ping (see `plans/session-ping-latency.md`) for the row label -- a neutral
+   * placeholder while still probing, distinct from a confirmed-unreachable host, never a raw
+   * `null`/`NaN`.
+   * @returns A short display string, e.g. `"42ms"`, `"--"`, or `"N/A"`.
+   */
+  static #formatPing(session: DiscoveredSession): string {
+    if (session.pingUnreachable) {
+      return 'N/A';
+    }
+
+    // Nullish (not just `=== null`) so a session object missing the field entirely (e.g. an
+    // older/non-conforming caller) still falls back to the same "still probing" placeholder
+    // instead of a `Math.round(undefined)` -> "NaNms".
+    const ping = session.ping ?? null;
+
+    if (ping === null) {
+      return '--';
+    }
+
+    return `${Math.round(ping)}ms`;
+  }
+
+  /**
    * Draw the hellwave logo top-left, or a plain-text stand-in while the hi-res PNG is still
    * loading (or if it failed to load at all).
    */
@@ -330,7 +353,9 @@ export default class MainMenu {
     // Rebuilds mainPage.items past #sidebarCount from a live session list -- called on every
     // push from SubscribeSessions (the initial snapshot, and every add/update/remove diff
     // thereafter), the same "slice back and re-push" pattern as before, just event-driven instead
-    // of poll-driven.
+    // of poll-driven. `sessions` already arrives sorted by ping bracket (see
+    // SessionDiscovery.#sortByPing, plans/session-ping-latency.md §6) -- rows are simply built in
+    // the order given, no sorting here.
     const rebuildSessionRows = (sessions: DiscoveredSession[]): void => {
       if (sessions.length === 0) {
         showSessionsMessage('No active games.');
@@ -343,7 +368,8 @@ export default class MainMenu {
 
       for (const session of sessions) {
         const label = MainMenu.#mapLabels.get(session.map) ?? session.map;
-        const fullLabel = `${label} [${session.currentPlayers}/${session.maxPlayers}]`;
+        const pingLabel = MainMenu.#formatPing(session);
+        const fullLabel = `${label} [${session.currentPlayers}/${session.maxPlayers}] ${pingLabel}`;
         const hostname = MainMenu.#truncateHostname(session.hostname);
 
         mainPage.items.push(new Action({
