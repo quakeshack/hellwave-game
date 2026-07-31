@@ -49,6 +49,7 @@ function createStaticCvars(overrides = {}) {
     deathmatch: createMockCvar(0),
     coop: createMockCvar(0),
     rounds: createMockCvar(12),
+    roundCurrent: createMockCvar(0),
     quiettime: createMockCvar(15),
     normaltime: createMockCvar(90),
     maxmonstersalive: createMockCvar(20),
@@ -204,6 +205,17 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
       'player.disconnected',
       ['manager.disconnected', playerEntity],
       ['manager.begin', playerEntity],
+    ]);
+  });
+});
+
+void describe('Hellwave ServerGameAPI.GetMapList', () => {
+  void test('each curated map carries its screenshot for the map-select screen', () => {
+    const maps = ServerGameAPI.GetMapList();
+
+    assert.deepEqual(maps.map((map) => [map.name, map.pictures]), [
+      ['hw_doom', ['maps/hw_doom.jpg']],
+      ['hw_e1m2', ['maps/hw_e1m2.jpg']],
     ]);
   });
 });

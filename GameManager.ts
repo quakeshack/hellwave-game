@@ -747,6 +747,7 @@ export default class GameManager {
     this.available_goodies_quad = Math.floor(this.round_monsters_limit / 30);
 
     this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
+    this.engine.SetCvar('hw_round_current', String(this.round_number));
 
     this.startQuietPhase();
     this.bringInNextRoundPlayers();

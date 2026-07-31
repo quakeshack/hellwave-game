@@ -1,15 +1,16 @@
 import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
-import type { ClientEdict, PostProcessStack } from '../../../shared/GameInterfaces.ts';
+import type { ClientEdict, ClientEngineAPI, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
 
 import { MessageBag, Q1HUD } from '../../id1/client/HUD.ts';
 import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.ts';
-import { buyMenuItems } from '../entity/Player.ts';
+import type { BuyMenuAvailabilityContext } from '../entity/Player.ts';
 import { phaseLabels, phases } from '../Phases.ts';
 
 import type { ClientGameAPI } from './ClientAPI.ts';
+import HellwaveBuyMenu from './menu/BuyMenu.ts';
 import { HellwaveStatsInfo } from './Sync.ts';
 
 type MoneyBalanceState = [number | null, number | null, number];
@@ -61,6 +62,16 @@ export default class HellwaveHUD extends Q1HUD {
     money: [null, null, -Infinity],
   };
 
+  // Assigned in `_subscribeToEvents()`, which the base class's `init()` always calls before
+  // anything else on this instance can run.
+  #buyMenu!: HellwaveBuyMenu;
+
+  override shutdown(): void {
+    super.shutdown();
+
+    this.#buyMenu.dispose();
+  }
+
   protected override _newStats(): HellwaveStatsInfo {
     return new HellwaveStatsInfo(this.engine);
   }
@@ -72,16 +83,29 @@ export default class HellwaveHUD extends Q1HUD {
   protected override _subscribeToEvents(): void {
     super._subscribeToEvents();
 
+    this.#buyMenu = new HellwaveBuyMenu(this, this.engine);
+    this.#buyMenu.register();
+
     this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: number | string | boolean | null): void => {
       switch (field) {
-        case 'buyzone':
-          console.assert(typeof value === 'number' && value >= -1 && value <= 2);
-          this.#updateBuyzonePostProcess(value as -1 | 0 | 1 | 2);
+        // Opening the buy menu is handled by the `hw_buymenu` command (see
+        // `HellwaveBuyMenu.Init`) -- the server only tells us whether the player is physically in
+        // a buyzone. The only thing this needs to react to is an *involuntary* close: leaving the
+        // zone, or the round moving on, while the menu happens to be showing.
+        case 'buyzone': {
+          console.assert(typeof value === 'number' && value >= -1 && value <= 1);
+          const buyzone = value as -1 | 0 | 1;
+
+          if (buyzone !== 1 && this.#buyMenu.isOpen()) {
+            this.engine.Menu.Pop();
+          }
           break;
+        }
 
         case 'money':
           console.assert(typeof value === 'number');
           this.inventory.money = [value as number, this.inventory.money[0], this.engine.CL.gametime];
+          this.#buyMenu.refreshIfOpen();
           break;
 
         default:
@@ -118,6 +142,11 @@ export default class HellwaveHUD extends Q1HUD {
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance: number): void => {
       this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.gametime];
+      this.#buyMenu.refreshIfOpen();
+    });
+
+    this.engine.eventBus.subscribe(clientEventName(clientEvent.BUY_MESSAGE), (message: string): void => {
+      this.#buyMenu.showFeedback(message);
     });
   }
 
@@ -138,7 +167,8 @@ export default class HellwaveHUD extends Q1HUD {
 
     this.#drawAccountBalance();
     this.#drawRoundStats();
-    this.#drawBuyMenu();
+    this.#drawBuyzonePrompt();
+    this.#buyMenu.tick(this.engine.CL.gametime);
     this.#drawPlayerNames();
   }
 
@@ -192,35 +222,46 @@ export default class HellwaveHUD extends Q1HUD {
     return score.isActive && score.name !== '' ? score.name : null;
   }
 
-  #drawBuyMenu(): void {
-    if (this.game.clientdata.buyzone === 0) {
+  /**
+   * Whether the player is currently standing in a buyzone, per the last-synced clientdata --
+   * used by `HellwaveBuyMenu`'s `hw_buymenu` command handler, which can't read `game.clientdata`
+   * directly since `game` is protected.
+   * @returns Whether the player is currently in a buyzone.
+   */
+  isInBuyzone(): boolean {
+    return this.game.clientdata.buyzone === 1;
+  }
+
+  /**
+   * Snapshot of the clientdata fields a `BuyMenuItem.available()` predicate may inspect (e.g.
+   * armor/ammo caps) -- lets `HellwaveBuyMenu` gray out already-maxed items without a server
+   * round-trip. `game.clientdata` itself is protected.
+   * @returns Current armor value and shell ammo count.
+   */
+  getBuyAvailabilityContext(): BuyMenuAvailabilityContext {
+    return { armorvalue: this.game.clientdata.armorvalue, ammo_shells: this.game.clientdata.ammo_shells };
+  }
+
+  /**
+   * Toggle the buy-menu blur/desaturate post-process stack -- called by `HellwaveBuyMenu`'s page
+   * on `onEnter`/`onExit`. Not applied over the game-over color-grade stack, which already owns
+   * the screen at that point.
+   */
+  setBuyMenuBlur(active: boolean): void {
+    if (this.stats?.phase === phases.gameover) {
       return;
     }
 
-    if (this.game.clientdata.buyzone === 1 || this.game.clientdata.buyzone === 2) {
+    if (active) {
+      this.engine.PostProcess.setStack(buymenuPostProcessStack);
+    } else {
+      this.engine.PostProcess.clearStack();
+    }
+  }
+
+  #drawBuyzonePrompt(): void {
+    if (this.game.clientdata.buyzone === 1) {
       this.sbar.drawString(-16 * 10, -48, 'Buyzone!', 2.0, new Vector(0.0, 1.0, 0.0));
-    }
-
-    if (this.game.clientdata.buyzone !== 2) {
-      return;
-    }
-
-    const startY = -48 - 16 * 16;
-    const currentMoney = this.inventory.money[0] ?? 0;
-
-    this.sbar.drawString(0, startY, 'Available for purchase:', 2.0);
-
-    for (const [impulse, item] of Object.entries(buyMenuItems)) {
-      if (item.cost > currentMoney) {
-        continue;
-      }
-
-      this.sbar.drawString(
-        0,
-        startY + 24 + 16 * Number(impulse),
-        `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`,
-        2.0,
-      );
     }
   }
 
@@ -261,16 +302,15 @@ export default class HellwaveHUD extends Q1HUD {
     this.sbar.drawString(0, -48, phaseLabels[this.stats!.phase!] ?? '', 2.0);
   }
 
-  #updateBuyzonePostProcess(buyzone: -1 | 0 | 1 | 2): void {
-    if (this.stats?.phase !== phases.gameover) {
-      switch (buyzone) {
-        case 2:
-          this.engine.PostProcess.setStack(buymenuPostProcessStack);
-          break;
-        default:
-          this.engine.PostProcess.clearStack();
-          break;
-      }
-    }
+  static override Init(engineAPI: ClientEngineAPI): void {
+    super.Init(engineAPI);
+
+    HellwaveBuyMenu.Init(engineAPI);
+  }
+
+  static override Shutdown(engineAPI: ClientEngineAPI): void {
+    super.Shutdown(engineAPI);
+
+    HellwaveBuyMenu.Shutdown(engineAPI);
   }
 }

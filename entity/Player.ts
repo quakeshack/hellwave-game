@@ -7,7 +7,7 @@ import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgu
 import { PlayerEntity } from '../../id1/entity/Player.ts';
 import { Backpack, type BackpackPickup } from '../../id1/entity/Weapons.ts';
 
-import { channel, clientEvent, flags, formatMoney, items, moveType, solid } from '../Defs.ts';
+import { channel, clientEvent, flags, formatMoney, fromBuyImpulse, items, moveType, solid } from '../Defs.ts';
 import { phases } from '../Phases.ts';
 
 import { HellwaveBackpackEntity } from './Items.ts';
@@ -34,10 +34,21 @@ interface BuyMenuEntityClass {
   readonly classname: string;
 }
 
+/**
+ * The subset of player state a `BuyMenuItem.available()` predicate may inspect. Deliberately
+ * narrower than `HellwavePlayer` so the client-side buy menu (`HellwaveBuyMenu`) can evaluate the
+ * same predicates from synced `clientdata` alone, without a server round-trip -- see
+ * `HellwaveHUD.getBuyAvailabilityContext()`.
+ */
+export interface BuyMenuAvailabilityContext {
+  readonly armorvalue: number;
+  readonly ammo_shells: number;
+}
+
 interface BuyMenuItem {
   readonly cost: number;
   readonly label: string;
-  readonly available?: (playerEntity: HellwavePlayer) => boolean;
+  readonly available?: (context: BuyMenuAvailabilityContext) => boolean;
   readonly entityClass?: BuyMenuEntityClass;
   readonly backpack?: BuyMenuBackpack;
   readonly spawnflags?: number;
@@ -49,8 +60,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     cost: 100,
     label: 'Heavy Armor',
     entityClass: HeavyArmorEntity,
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.armorvalue < 200;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.armorvalue < 200;
     },
   },
 
@@ -59,8 +70,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     cost: 200,
     label: 'Shotgun / 20 shells',
     backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 20 },
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
 
@@ -70,8 +81,8 @@ export const buyMenuItems: Record<BuyMenuItemId, BuyMenuItem> = {
     label: 'Super Shotgun',
     entityClass: WeaponSuperShotgun,
     backpack: { items: items.IT_SHOTGUN | items.IT_SHELLS, ammo_shells: 50 },
-    available(playerEntity: HellwavePlayer): boolean {
-      return playerEntity.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
+    available(context: BuyMenuAvailabilityContext): boolean {
+      return context.ammo_shells < HellwavePlayer._backpackLimits.ammo_shells;
     },
   },
 
@@ -95,8 +106,12 @@ export class HellwaveBackpack extends Backpack {
 export default class HellwavePlayer extends PlayerEntity {
   @serializable money = 0;
 
-  /** -1: not allowed, 0: outside, 1: inside zone, 2: inside menu. */
-  @serializable buyzone: -1 | 0 | 1 | 2 = 0;
+  /**
+   * -1: not allowed, 0: outside, 1: inside zone. Menu open/closed is purely client-side UI
+   * state -- the server only cares whether the player is physically in a buyzone when a
+   * purchase impulse actually lands.
+   */
+  @serializable buyzone: -1 | 0 | 1 = 0;
 
   @serializable buyzone_time = 0;
   @serializable spectating = false;
@@ -310,11 +325,6 @@ export default class HellwavePlayer extends PlayerEntity {
         this.impulse = 0;
         break;
 
-      case 21: // toggle buy menu
-        this._buyMenuRequested();
-        this.impulse = 0;
-        break;
-
       case 101: // money cheat
         if (this._canUseCheats()) {
           this.updateMoney(10000);
@@ -323,8 +333,10 @@ export default class HellwavePlayer extends PlayerEntity {
         break;
     }
 
-    if (this.buyzone === 2 && this.impulse > 0 && this.impulse <= 9) {
-      this._buyMenuPurchase(this.impulse as BuyMenuItemId);
+    const buyItemId = fromBuyImpulse(this.impulse);
+
+    if (buyItemId !== null) {
+      this._buyMenuPurchase(buyItemId as BuyMenuItemId);
       this.impulse = 0;
     }
 
@@ -339,47 +351,32 @@ export default class HellwavePlayer extends PlayerEntity {
     super._weaponFrame();
   }
 
-  protected _buyMenuRequested(): void {
-    switch (this.buyzone) {
-      case -1:
-        return;
-
-      case 0:
-        this.consolePrint('you are not in a buyzone!\n');
-        return;
-
-      case 2:
-        this.buyzone = 1; // still inside the zone
-        return;
-
-      case 1:
-        this.buyzone = 2; // inside the buy menu
-        return;
-    }
-  }
-
   protected _buyMenuPurchase(item: BuyMenuItemId): void {
-    // TODO: send events to client instead
+    if (this.buyzone !== 1) {
+      this.dispatchEvent(clientEvent.BUY_MESSAGE, 'you are not in a buyzone!');
+      return;
+    }
 
     const menuItem = buyMenuItems[item];
 
     if (!menuItem) {
-      this.consolePrint(`invalid buy menu item ${item}!\n`);
+      this.dispatchEvent(clientEvent.BUY_MESSAGE, `invalid buy menu item ${item}!`);
       return;
     }
 
     if (menuItem.available && !menuItem.available(this)) {
-      this.centerPrint(`you already have ${menuItem.label}`);
+      this.dispatchEvent(clientEvent.BUY_MESSAGE, `you already have ${menuItem.label}`);
       return;
     }
 
     if (this.money < menuItem.cost) {
-      this.centerPrint(`you need ${formatMoney(menuItem.cost)} to buy that!`);
+      this.dispatchEvent(clientEvent.BUY_MESSAGE, `you need ${formatMoney(menuItem.cost)} to buy that!`);
       return;
     }
 
     // take the money
     this.updateMoney(-menuItem.cost);
+    this.dispatchEvent(clientEvent.BUY_MESSAGE, `bought ${menuItem.label}!`);
 
     // spawn entity to pick up
     if (menuItem.entityClass) {

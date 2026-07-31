@@ -63,6 +63,7 @@ function createMockGame(overrides = {}) {
   const consolePrints = [];
   const broadcastPrints = [];
   const playTracks = [];
+  const setCvars = [];
 
   const engine = {
     eventBus: {
@@ -88,6 +89,9 @@ function createMockGame(overrides = {}) {
       return [];
     },
     ChangeLevel() {
+    },
+    SetCvar(name, value) {
+      setCvars.push([name, value]);
     },
     ...engineOverrides,
   };
@@ -123,6 +127,7 @@ function createMockGame(overrides = {}) {
     consolePrints,
     broadcastPrints,
     playTracks,
+    setCvars,
   };
 }
 
@@ -175,7 +180,7 @@ void describe('GameManager', () => {
       },
     });
     const activePlayer = createPlayerStub();
-    const { game, published, playTracks } = createMockGame({
+    const { game, published, playTracks, setCvars } = createMockGame({
       engine: {
         GetClients() {
           return [
@@ -203,6 +208,25 @@ void describe('GameManager', () => {
       ['game.round.started', 1, 4, 20],
       ['game.phase.changed', phases.quiet],
       ['game.phase.endingtime', 25],
+    ]);
+    // Mirrors round_number into a Cvar.FLAG.SERVER cvar so the master-server settings sweep
+    // (WebRTCDriver#GatherServerInfo) picks it up for the lobby session list.
+    assert.deepEqual(setCvars, [['hw_round_current', '1']]);
+  });
+
+  void test('mirrors each subsequent round number into hw_round_current', () => {
+    const { game, setCvars } = createMockGame();
+    const manager = new GameManager(game);
+
+    manager.round_number_limit = 4;
+    manager.startNextRound();
+    manager.startNextRound();
+    manager.startNextRound();
+
+    assert.deepEqual(setCvars, [
+      ['hw_round_current', '1'],
+      ['hw_round_current', '2'],
+      ['hw_round_current', '3'],
     ]);
   });
 

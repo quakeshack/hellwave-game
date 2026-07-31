@@ -1,4 +1,4 @@
-import type { Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
+import type { CommonEngineAPI, Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
 
 import { cvarFlags } from '../../shared/Defs.ts';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
@@ -18,6 +18,7 @@ import { HellwaveBossMonsterEntity, HellwaveBossMonsterSpawnMarker } from './ent
 
 interface HellwaveCvarMap extends Record<keyof typeof id1ServerGameAPI._cvars, Cvar | null> {
   rounds: Cvar | null;
+  roundCurrent: Cvar | null;
   quiettime: Cvar | null;
   normaltime: Cvar | null;
   maxmonstersalive: Cvar | null;
@@ -56,6 +57,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
   static _cvars: HellwaveCvarMap = {
     ...id1ServerGameAPI._cvars,
     rounds: null,
+    roundCurrent: null,
     quiettime: null,
     normaltime: null,
     maxmonstersalive: null,
@@ -158,7 +160,8 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
     Object.assign(this._cvars, id1ServerGameAPI._cvars);
 
-    this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '10', 0, 'Number of rounds to play in a map. Must be set before the map starts. Minimum 2, maximum 12.');
+    this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '10', cvarFlags.SERVER, 'Number of rounds to play in a map. Must be set before the map starts. Minimum 2, maximum 12.');
+    this._cvars.roundCurrent = serverEngineAPI.RegisterCvar('hw_round_current', '0', cvarFlags.SERVER | cvarFlags.READONLY, 'Current round number, mirrored for the session list. Set by GameManager, not user-settable.');
     this._cvars.quiettime = serverEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
     this._cvars.normaltime = serverEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     this._cvars.maxmonstersalive = serverEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
@@ -180,8 +183,8 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
   static override GetMapList(): MapDetails[] {
     return [
-      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: [] },
-      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: [] },
+      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: ['maps/hw_doom.jpg'] },
+      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: ['maps/hw_e1m2.jpg'] },
     ];
   }
 
@@ -189,7 +192,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
     return [
       {
         label: 'Castle of the Damned',
-        callback(engineAPI: ServerEngineAPI): void {
+        callback(engineAPI: CommonEngineAPI): void {
           engineAPI.AppendConsoleText(`
           hostname "Hellwave: Castle of the Damned"
           deathmatch 0
@@ -202,7 +205,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
       },
       {
         label: 'Doomed Computer Station',
-        callback(engineAPI: ServerEngineAPI): void {
+        callback(engineAPI: CommonEngineAPI): void {
           engineAPI.AppendConsoleText(`
           hostname "Hellwave: Doomed Computer Station"
           deathmatch 0
