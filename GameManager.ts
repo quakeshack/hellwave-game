@@ -11,7 +11,7 @@ import BaseMonster from '../id1/entity/monster/BaseMonster.ts';
 import DogMonsterEntity from '../id1/entity/monster/Dog.ts';
 import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.ts';
 import OgreMonsterEntity from '../id1/entity/monster/Ogre.ts';
-import { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.ts';
+import ShalrathMonsterEntity, { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.ts';
 import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.ts';
 import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.ts';
 import WizardMonsterEntity from '../id1/entity/monster/Wizard.ts';
@@ -24,116 +24,128 @@ import { BuyZoneEntity } from './entity/Zones.ts';
 import { phases, type HellwavePhase } from './Phases.ts';
 import { HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
 import { HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
+import TarbabyMonsterEntity from '../id1/entity/monster/Tarbaby.ts';
+import DemonMonster from '../id1/entity/monster/Demon.ts';
 
 interface MonsterSpawnChoice {
   readonly classname: string;
   readonly probability: number;
+  /** limit of how many can be alive at the same time */
   readonly limit?: number;
 }
 
 const gameRoundMonsterMatrix = {
   1: [
-    { classname: ZombieMonster.classname, probability: 0.3, limit: 1 },
-    { classname: DogMonsterEntity.classname, probability: 1.0 },
+    { classname: ZombieMonster.classname, probability: 0.25, limit: 1 },
+    { classname: DogMonsterEntity.classname, probability: 1.0, limit: 3 },
     { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 1 },
     { classname: ArmySoldierMonster.classname, probability: 1.0 },
     { classname: KnightMonster.classname, probability: 0.2, limit: 2 },
   ],
   2: [
-    { classname: ZombieMonster.classname, probability: 0.5, limit: 5 },
+    { classname: ZombieMonster.classname, probability: 0.5, limit: 3 },
     { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
     { classname: ArmySoldierMonster.classname, probability: 0.75 },
     { classname: KnightMonster.classname, probability: 0.5 },
   ],
   3: [
-    { classname: ArmySoldierMonster.classname, probability: 0.2 },
-    { classname: WizardMonsterEntity.classname, probability: 0.2 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 3 },
-    { classname: ZombieMonster.classname, probability: 0.2 },
-    { classname: KnightMonster.classname, probability: 0.5 },
-    { classname: HellKnightMonster.classname, probability: 0.2, limit: 3 },
-  ],
-  4: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 5 },
-    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
-    { classname: ZombieMonster.classname, probability: 0.5 },
-    { classname: KnightMonster.classname, probability: 1.0 },
-    { classname: HellKnightMonster.classname, probability: 0.5 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-  ],
-  5: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
-    { classname: ShalrathMissileEntity.classname, probability: 0.7, limit: 3 },
-    { classname: ZombieMonster.classname, probability: 0.2, limit: 3 },
-    { classname: HellKnightMonster.classname, probability: 1.0 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
-  ],
-  6: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 0.3, limit: 1 },
-    { classname: ZombieMonster.classname, probability: 0.5 },
-    { classname: KnightMonster.classname, probability: 1.0 },
-    { classname: HellKnightMonster.classname, probability: 0.5 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-  ],
-  7: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
-    { classname: ShalrathMissileEntity.classname, probability: 0.7, limit: 3 },
-    { classname: ZombieMonster.classname, probability: 0.2, limit: 3 },
-    { classname: HellKnightMonster.classname, probability: 1.0 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
-  ],
-  8: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 2 },
-    { classname: ZombieMonster.classname, probability: 0.5 },
-    { classname: KnightMonster.classname, probability: 1.0 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: HellKnightMonster.classname, probability: 1.0 },
-    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
-  ],
-  9: [
-    { classname: WizardMonsterEntity.classname, probability: 0.3 },
-    { classname: ZombieMonster.classname, probability: 0.5 },
-    { classname: KnightMonster.classname, probability: 1.0 },
-    { classname: HellKnightMonster.classname, probability: 0.5 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 2 },
-    { classname: ShalrathMissileEntity.classname, probability: 0.7 },
-    { classname: ArmyEnforcerMonster.classname, probability: 0.2 },
-  ],
-  10: [
-    { classname: DogMonsterEntity.classname, probability: 1.0 },
     { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
     { classname: ArmySoldierMonster.classname, probability: 0.75 },
+    { classname: KnightMonster.classname, probability: 0.5 },
+    { classname: WizardMonsterEntity.classname, probability: 0.2, limit: 2 },
+    { classname: OgreMonsterEntity.classname, probability: 0.666, limit: 3 },
+    { classname: HellKnightMonster.classname, probability: 0.125, limit: 3 },
+  ],
+  4: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 3 },
+    { classname: OgreMonsterEntity.classname, probability: 0.75, limit: 5 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
+    { classname: KnightMonster.classname, probability: 0.8 },
+    { classname: HellKnightMonster.classname, probability: 0.4, limit: 5 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 10 },
+  ],
+  5: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 5 },
+    { classname: OgreMonsterEntity.classname, probability: 0.75, limit: 5 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
+    { classname: KnightMonster.classname, probability: 0.4 },
     { classname: HellKnightMonster.classname, probability: 0.5 },
-    { classname: KnightMonster.classname, probability: 0.75 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 10 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2, limit: 5 },
+    { classname: DemonMonster.classname, probability: 0.25, limit: 5 },
+  ],
+  6: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 7 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 3 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.3, limit: 1 },
+    { classname: ZombieMonster.classname, probability: 0.5, limit: 3 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 3 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 10 },
+    { classname: DemonMonster.classname, probability: 0.2, limit: 7 },
+  ],
+  7: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 8 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 5 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
+    { classname: ZombieMonster.classname, probability: 0.25, limit: 5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 3 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+    { classname: DemonMonster.classname, probability: 0.3, limit: 7 },
+  ],
+  8: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 10 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 5 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.2, limit: 1 },
+    { classname: ShalrathMonsterEntity.classname, probability: 0.25, limit: 5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 3 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+  ],
+  9: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 10 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 7 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
+    { classname: TarbabyMonsterEntity.classname, probability: 0.2, limit: 5 },
+    { classname: ShalrathMonsterEntity.classname, probability: 0.25, limit: 5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 6 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0 },
+  ],
+  10: [
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 10 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 7 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
+    { classname: TarbabyMonsterEntity.classname, probability: 0.2, limit: 5 },
+    { classname: ShalrathMonsterEntity.classname, probability: 0.25, limit: 5 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 6 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 10 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2, limit: 10 },
   ],
   11: [
-    { classname: WizardMonsterEntity.classname, probability: 0.5 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 1 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: HellKnightMonster.classname, probability: 1.0 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 7 },
+    { classname: DemonMonster.classname, probability: 0.3, limit: 7 },
+    { classname: TarbabyMonsterEntity.classname, probability: 0.25, limit: 3 },
+    { classname: KnightMonster.classname, probability: 1.0 },
+    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 10 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2, limit: 10 },
+    { classname: DogMonsterEntity.classname, probability: 0.3, limit: 7 },
   ],
   12: [
-    { classname: DogMonsterEntity.classname, probability: 1.0 },
-    { classname: OgreMonsterEntity.classname, probability: 1.0 },
-    { classname: ShamblerMonsterEntity.classname, probability: 1.0, limit: 1 },
+    { classname: WizardMonsterEntity.classname, probability: 0.3, limit: 10 },
+    { classname: OgreMonsterEntity.classname, probability: 1.0, limit: 7 },
+    { classname: ShamblerMonsterEntity.classname, probability: 0.1, limit: 1 },
+    { classname: TarbabyMonsterEntity.classname, probability: 0.2, limit: 5 },
+    { classname: ShalrathMonsterEntity.classname, probability: 0.25, limit: 5 },
+    { classname: HellKnightMonster.classname, probability: 0.5, limit: 6 },
+    { classname: DemonMonster.classname, probability: 0.3, limit: 7 },
+    { classname: KnightMonster.classname, probability: 1.0 },
     { classname: ArmySoldierMonster.classname, probability: 1.0 },
-    { classname: ArmyEnforcerMonster.classname, probability: 1.0, limit: 5 },
-    { classname: ArmySoldierMonster.classname, probability: 1.0, limit: 5 },
-    { classname: WizardMonsterEntity.classname, probability: 0.5, limit: 5 },
+    { classname: ArmyEnforcerMonster.classname, probability: 0.2, limit: 10 },
+    { classname: DogMonsterEntity.classname, probability: 0.3, limit: 7 },
   ],
 } satisfies Record<number, readonly MonsterSpawnChoice[]>;
 
@@ -855,6 +867,7 @@ export default class GameManager {
   }
 
   clientConnected(_playerEntity: HellwavePlayer): void {
+    // CR: we wait for the first client to come in and then we initialize the game
     if (!this.gameInitialized) {
       this.#initGame();
       this.gameInitialized = true;

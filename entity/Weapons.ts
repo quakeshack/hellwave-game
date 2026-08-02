@@ -1,10 +1,11 @@
 import Vector from '../../../shared/Vector.ts';
 
 import type BaseEntity from '../../id1/entity/BaseEntity.ts';
+import { BaseWeaponEntity } from '../../id1/entity/Items.ts';
 import { Superspike as Id1Superspike } from '../../id1/entity/Weapons.ts';
 import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
-import { channel } from '../Defs.ts';
+import { channel, items } from '../Defs.ts';
 
 const ricochetSounds = [
   'weapons/ric1.wav',
@@ -56,5 +57,21 @@ export class HellwaveSuperspike extends Id1Superspike {
   override spawn(): void {
     super.spawn();
     this._direction.set(this.velocity).normalize();
+  }
+}
+
+/**
+ * QUAKED weapon_shotgun (0 .5 .8) (-16 -16 0) (16 16 32)
+ */
+@serializableObject
+export class WeaponShotgun extends BaseWeaponEntity {
+  static classname = 'weapon_shotgun';
+
+  static _model = 'progs/g_shot1.mdl'; // NOTE: only available with LibreQuake assets
+  static _weapon = items.IT_SHOTGUN;
+
+  override spawn(): void {
+    this.ammo_shells = 5;
+    super.spawn();
   }
 }

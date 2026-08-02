@@ -10,7 +10,7 @@ import { HellwaveBackpackEntity, HellwaveHealthItemEntity } from './entity/Items
 import { HellwaveDogMonsterEntity, HellwaveSoldierMonsterEntity, HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
 import HellwavePlayer from './entity/Player.ts';
 import { WallEntity } from './entity/Props.ts';
-import { HellwaveSuperspike } from './entity/Weapons.ts';
+import { HellwaveSuperspike, WeaponShotgun } from './entity/Weapons.ts';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.ts';
 import GameManager from './GameManager.ts';
 import HellwaveStats from './helper/HellwaveStats.ts';
@@ -49,6 +49,7 @@ const entityClasses = [
   HellwaveSoldierMonsterEntity,
   HellwaveBossMonsterEntity,
   HellwaveBossMonsterSpawnMarker,
+  WeaponShotgun,
 ] satisfies readonly EntityClass[];
 
 @serializableObject
@@ -165,7 +166,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
     this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '10', cvarFlags.SERVER, 'Number of rounds to play in a map. Must be set before the map starts. Minimum 2, maximum 12.');
     this._cvars.roundCurrent = serverEngineAPI.RegisterCvar('hw_round_current', '0', cvarFlags.SERVER | cvarFlags.READONLY, 'Current round number, mirrored for the session list. Set by GameManager, not user-settable.');
     this._cvars.maxplayers = serverEngineAPI.RegisterCvar('hw_maxplayers', '4', 0, 'Player slot count for the next hosted game, applied via the "maxplayers" command before the map starts. Must not exceed the selected map\'s own player capacity.');
-    this._cvars.quiettime = serverEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
+    this._cvars.quiettime = serverEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items. Minimum 30, maximum 120.');
     this._cvars.normaltime = serverEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     this._cvars.maxmonstersalive = serverEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');
     this._cvars.debug_spawnpoints = serverEngineAPI.RegisterCvar('hw_debug_spawnpoints', '0', cvarFlags.CHEAT, 'If set to 1, spawn points will be visualized with debug markers.');

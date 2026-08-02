@@ -2,12 +2,12 @@ import ZombieMonster from '../../id1/entity/monster/Zombie.ts';
 import type Vector from '../../../shared/Vector.ts';
 
 import DogMonsterEntity from '../../id1/entity/monster/Dog.ts';
-import { serializableObject, irandom, serializable } from '../../id1/helper/MiscHelpers.ts';
+import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 
 import { hull } from '../Defs.ts';
 import type BaseEntity from '../../id1/entity/BaseEntity.ts';
 import { ArmySoldierMonster } from '../../id1/entity/monster/Soldier.ts';
-import BaseMonster from '../../id1/entity/monster/BaseMonster.ts';
+import { WeaponShotgun } from './Weapons.ts';
 
 @serializableObject
 export class HellwaveDogMonsterEntity extends DogMonsterEntity {
@@ -37,6 +37,14 @@ export class HellwaveZombieMonsterEntity extends ZombieMonster {
 @serializableObject
 export class HellwaveSoldierMonsterEntity extends ArmySoldierMonster {
   override _dropBackpack(): void {
-    BaseMonster.prototype._dropBackpack.call(this, { ammo_shells: irandom(5, 25) });
+    const shotgun = this.engine.SpawnEntity<WeaponShotgun>(WeaponShotgun.classname, {
+      origin: this.origin.copy(),
+      regeneration_time: 0,
+      remove_after: 120,
+    })?.entity;
+
+    console.assert(shotgun instanceof WeaponShotgun);
+
+    shotgun!.toss();
   }
 }

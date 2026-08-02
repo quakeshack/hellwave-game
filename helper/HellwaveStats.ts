@@ -63,6 +63,10 @@ export default class HellwaveStats extends GameStats {
         this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase_ending_time', this.phase_ending_time);
       }
     });
+
+    this.engine.eventBus.subscribe('game.monster.spawned', () => {
+      this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', this.monsters_total);
+    });
   }
 
   updateSquadStats(squadStanding: number, squadTotal: number): this {

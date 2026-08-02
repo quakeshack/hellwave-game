@@ -9,10 +9,11 @@ await import('../../../../id1/GameAPI.ts');
 const { default: HellwaveMenu } = await import('../../../client/menu/Menu.ts');
 
 void describe('Hellwave new game settings', () => {
-  void test('onEnter loads the current rounds, max players, and private-game state from cvars', () => {
+  void test('onEnter loads the current rounds, max players, quiet time, and private-game state from cvars', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '6');
     engine.SetCvar('hw_maxplayers', '3');
+    engine.SetCvar('hw_quiet_time', '45');
     engine.SetCvar('sv_public', '0'); // 0 = private
 
     getNewGamePage().items[0].action(); // hw_doom -- opens the settings screen
@@ -21,10 +22,11 @@ void describe('Hellwave new game settings', () => {
     assert.equal(page.items[0].getValue(), 6);
     assert.equal(page.items[1].getValue(), 3);
     assert.equal(page.items[1].max, 4); // hw_doom's own MapDetails.maxplayers cap
-    assert.equal(page.items[2].getValue(), 1); // private toggle is "on"
+    assert.equal(page.items[2].getValue(), 45);
+    assert.equal(page.items[3].getValue(), 1); // private toggle is "on"
   });
 
-  void test('defaults to 10 rounds, the map\'s own capacity, and public when the cvars have never been set', () => {
+  void test('defaults to 10 rounds, the map\'s own capacity, 90s quiet time, and public when the cvars have never been set', () => {
     // The real engine's GetCvar() returns null for a cvar that was never registered (Cvar.FindVar
     // semantics); the mock auto-vivifies instead, so this override restores the real contract for
     // this one test.
@@ -35,7 +37,8 @@ void describe('Hellwave new game settings', () => {
 
     assert.equal(page.items[0].getValue(), 10);
     assert.equal(page.items[1].getValue(), 4); // hw_doom's own MapDetails.maxplayers cap
-    assert.equal(page.items[2].getValue(), 0); // public by default
+    assert.equal(page.items[2].getValue(), 90);
+    assert.equal(page.items[3].getValue(), 0); // public by default
   });
 
   void test('clamps a stored max-players value that exceeds the selected map\'s capacity', () => {
@@ -46,6 +49,16 @@ void describe('Hellwave new game settings', () => {
     const page = getNewGameSettingsPage();
 
     assert.equal(page.items[1].getValue(), 4);
+  });
+
+  void test('Quiet Time field is bounded to 30-120 seconds', () => {
+    const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
+
+    getNewGamePage().items[0].action();
+    const page = getNewGameSettingsPage();
+
+    assert.equal(page.items[2].min, 30);
+    assert.equal(page.items[2].max, 120);
   });
 
   void test('Start always hosts a multiplayer game on the selected map, never a bare singleplayer map', () => {
@@ -69,10 +82,11 @@ void describe('Hellwave new game settings', () => {
     assert.deepEqual(engine.appendedConsoleText, ['disconnect\n']);
   });
 
-  void test('Start commits rounds/max-players/private-game only when actually changed from what was loaded', () => {
+  void test('Start commits rounds/max-players/quiet-time/private-game only when actually changed from what was loaded', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '10');
     engine.SetCvar('hw_maxplayers', '4');
+    engine.SetCvar('hw_quiet_time', '90');
     engine.SetCvar('sv_public', '1');
     engine.SetCvar('_cl_name', 'Christian');
     engine.cvarSets.length = 0; // discard the setup writes above
@@ -81,13 +95,15 @@ void describe('Hellwave new game settings', () => {
     const page = getNewGameSettingsPage();
     page.items[0].setValue(5); // Rounds: 5
     page.items[1].setValue(2); // Max Players: 2
-    page.items[2].setValue(1); // private
+    page.items[2].setValue(60); // Quiet Time: 60
+    page.items[3].setValue(1); // private
     page.items.at(-1).action(); // Start
 
     assert.deepEqual(engine.cvarSets, [
       ['hw_rounds', '5'],
       ['sv_public', '0'],
       ['hw_maxplayers', '2'],
+      ['hw_quiet_time', '60'],
       ['hostname', "Christian's game"],
     ]);
   });
@@ -96,6 +112,7 @@ void describe('Hellwave new game settings', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '10');
     engine.SetCvar('hw_maxplayers', '4');
+    engine.SetCvar('hw_quiet_time', '90');
     engine.SetCvar('sv_public', '1');
     engine.cvarSets.length = 0; // discard the setup writes above
 
@@ -103,7 +120,8 @@ void describe('Hellwave new game settings', () => {
     getNewGameSettingsPage().items.at(-1).action(); // Start, no changes made
 
     // hostname is committed unconditionally on every Start (see the dedicated tests below) --
-    // this test only cares that hw_rounds/hw_maxplayers/sv_public are left alone when unchanged.
+    // this test only cares that hw_rounds/hw_maxplayers/hw_quiet_time/sv_public are left alone
+    // when unchanged.
     assert.deepEqual(engine.cvarSets.filter(([name]) => name !== 'hostname'), []);
   });
 
@@ -165,7 +183,7 @@ void describe('Hellwave new game settings', () => {
     assert.equal(page.items.at(-1).font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
   });
 
-  void test('layout.hitTest resolves the Rounds/Max Players/Private Game fields and the right-aligned Start button', async () => {
+  void test('layout.hitTest resolves the Rounds/Max Players/Quiet Time/Private Game fields and the right-aligned Start button', async () => {
     const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
 
     getNewGamePage().items[0].action();
@@ -177,9 +195,10 @@ void describe('Hellwave new game settings', () => {
     // Each row is item.getHeight() (8, default) + spacing (12) = 20 virtual units tall.
     assert.equal(page.layout.hitTest(page.items, 999, 174), 0); // Rounds field row (startY=170)
     assert.equal(page.layout.hitTest(page.items, 999, 194), 1); // Max Players field row (170+20)
-    assert.equal(page.layout.hitTest(page.items, 999, 214), 2); // Private Game field row (170+40)
+    assert.equal(page.layout.hitTest(page.items, 999, 214), 2); // Quiet Time field row (170+40)
+    assert.equal(page.layout.hitTest(page.items, 999, 234), 3); // Private Game field row (170+60)
     // "Start!" is 6 chars * 14px (mock cellWidth) = 84px wide, right/bottom edges at (632, 352).
-    assert.equal(page.layout.hitTest(page.items, 590, 344), 3); // Start, bottom-right corner
+    assert.equal(page.layout.hitTest(page.items, 590, 344), 4); // Start, bottom-right corner
     assert.equal(page.layout.hitTest(page.items, 500, 344), null); // left of Start's column
     assert.equal(page.layout.hitTest(page.items, 590, 100), null); // above Start's row
   });
