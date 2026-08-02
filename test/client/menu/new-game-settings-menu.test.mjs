@@ -9,19 +9,22 @@ await import('../../../../id1/GameAPI.ts');
 const { default: HellwaveMenu } = await import('../../../client/menu/Menu.ts');
 
 void describe('Hellwave new game settings', () => {
-  void test('onEnter loads the current rounds and private-game state from cvars', () => {
+  void test('onEnter loads the current rounds, max players, and private-game state from cvars', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '6');
+    engine.SetCvar('hw_maxplayers', '3');
     engine.SetCvar('sv_public', '0'); // 0 = private
 
     getNewGamePage().items[0].action(); // hw_doom -- opens the settings screen
     const page = getNewGameSettingsPage();
 
     assert.equal(page.items[0].getValue(), 6);
-    assert.equal(page.items[1].getValue(), 1); // private toggle is "on"
+    assert.equal(page.items[1].getValue(), 3);
+    assert.equal(page.items[1].max, 4); // hw_doom's own MapDetails.maxplayers cap
+    assert.equal(page.items[2].getValue(), 1); // private toggle is "on"
   });
 
-  void test('defaults to 10 rounds and public when the cvars have never been set', () => {
+  void test('defaults to 10 rounds, the map\'s own capacity, and public when the cvars have never been set', () => {
     // The real engine's GetCvar() returns null for a cvar that was never registered (Cvar.FindVar
     // semantics); the mock auto-vivifies instead, so this override restores the real contract for
     // this one test.
@@ -31,7 +34,18 @@ void describe('Hellwave new game settings', () => {
     const page = getNewGameSettingsPage();
 
     assert.equal(page.items[0].getValue(), 10);
-    assert.equal(page.items[1].getValue(), 0); // public by default
+    assert.equal(page.items[1].getValue(), 4); // hw_doom's own MapDetails.maxplayers cap
+    assert.equal(page.items[2].getValue(), 0); // public by default
+  });
+
+  void test('clamps a stored max-players value that exceeds the selected map\'s capacity', () => {
+    const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
+    engine.SetCvar('hw_maxplayers', '99'); // stale value from a map with a higher cap
+
+    getNewGamePage().items[0].action(); // hw_doom, capped at 4
+    const page = getNewGameSettingsPage();
+
+    assert.equal(page.items[1].getValue(), 4);
   });
 
   void test('Start always hosts a multiplayer game on the selected map, never a bare singleplayer map', () => {
@@ -55,9 +69,10 @@ void describe('Hellwave new game settings', () => {
     assert.deepEqual(engine.appendedConsoleText, ['disconnect\n']);
   });
 
-  void test('Start commits rounds/private-game only when actually changed from what was loaded', () => {
+  void test('Start commits rounds/max-players/private-game only when actually changed from what was loaded', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '10');
+    engine.SetCvar('hw_maxplayers', '4');
     engine.SetCvar('sv_public', '1');
     engine.SetCvar('_cl_name', 'Christian');
     engine.cvarSets.length = 0; // discard the setup writes above
@@ -65,12 +80,14 @@ void describe('Hellwave new game settings', () => {
     getNewGamePage().items[0].action();
     const page = getNewGameSettingsPage();
     page.items[0].setValue(5); // Rounds: 5
-    page.items[1].setValue(1); // private
+    page.items[1].setValue(2); // Max Players: 2
+    page.items[2].setValue(1); // private
     page.items.at(-1).action(); // Start
 
     assert.deepEqual(engine.cvarSets, [
       ['hw_rounds', '5'],
       ['sv_public', '0'],
+      ['hw_maxplayers', '2'],
       ['hostname', "Christian's game"],
     ]);
   });
@@ -78,6 +95,7 @@ void describe('Hellwave new game settings', () => {
   void test('Start does not touch cvars that were left unchanged', () => {
     const { engine, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_rounds', '10');
+    engine.SetCvar('hw_maxplayers', '4');
     engine.SetCvar('sv_public', '1');
     engine.cvarSets.length = 0; // discard the setup writes above
 
@@ -85,7 +103,7 @@ void describe('Hellwave new game settings', () => {
     getNewGameSettingsPage().items.at(-1).action(); // Start, no changes made
 
     // hostname is committed unconditionally on every Start (see the dedicated tests below) --
-    // this test only cares that hw_rounds/sv_public are left alone when unchanged.
+    // this test only cares that hw_rounds/hw_maxplayers/sv_public are left alone when unchanged.
     assert.deepEqual(engine.cvarSets.filter(([name]) => name !== 'hostname'), []);
   });
 
@@ -147,7 +165,7 @@ void describe('Hellwave new game settings', () => {
     assert.equal(page.items.at(-1).font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
   });
 
-  void test('layout.hitTest resolves the Rounds/Private Game fields and the right-aligned Start button', async () => {
+  void test('layout.hitTest resolves the Rounds/Max Players/Private Game fields and the right-aligned Start button', async () => {
     const { getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
 
     getNewGamePage().items[0].action();
@@ -156,10 +174,12 @@ void describe('Hellwave new game settings', () => {
     await Promise.resolve(); // flush LoadBitmapFont's promise, so Start is measured with the real font
 
     // Field rows no longer care about px (the whole row width is clickable) -- only py matters.
+    // Each row is item.getHeight() (8, default) + spacing (12) = 20 virtual units tall.
     assert.equal(page.layout.hitTest(page.items, 999, 174), 0); // Rounds field row (startY=170)
-    assert.equal(page.layout.hitTest(page.items, 999, 194), 1); // Private Game field row
+    assert.equal(page.layout.hitTest(page.items, 999, 194), 1); // Max Players field row (170+20)
+    assert.equal(page.layout.hitTest(page.items, 999, 214), 2); // Private Game field row (170+40)
     // "Start!" is 6 chars * 14px (mock cellWidth) = 84px wide, right/bottom edges at (632, 352).
-    assert.equal(page.layout.hitTest(page.items, 590, 344), 2); // Start, bottom-right corner
+    assert.equal(page.layout.hitTest(page.items, 590, 344), 3); // Start, bottom-right corner
     assert.equal(page.layout.hitTest(page.items, 500, 344), null); // left of Start's column
     assert.equal(page.layout.hitTest(page.items, 590, 100), null); // above Start's row
   });

@@ -19,6 +19,7 @@ import { HellwaveBossMonsterEntity, HellwaveBossMonsterSpawnMarker } from './ent
 interface HellwaveCvarMap extends Record<keyof typeof id1ServerGameAPI._cvars, Cvar | null> {
   rounds: Cvar | null;
   roundCurrent: Cvar | null;
+  maxplayers: Cvar | null;
   quiettime: Cvar | null;
   normaltime: Cvar | null;
   maxmonstersalive: Cvar | null;
@@ -58,6 +59,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
     ...id1ServerGameAPI._cvars,
     rounds: null,
     roundCurrent: null,
+    maxplayers: null,
     quiettime: null,
     normaltime: null,
     maxmonstersalive: null,
@@ -162,6 +164,7 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
     this._cvars.rounds = serverEngineAPI.RegisterCvar('hw_rounds', '10', cvarFlags.SERVER, 'Number of rounds to play in a map. Must be set before the map starts. Minimum 2, maximum 12.');
     this._cvars.roundCurrent = serverEngineAPI.RegisterCvar('hw_round_current', '0', cvarFlags.SERVER | cvarFlags.READONLY, 'Current round number, mirrored for the session list. Set by GameManager, not user-settable.');
+    this._cvars.maxplayers = serverEngineAPI.RegisterCvar('hw_maxplayers', '4', 0, 'Player slot count for the next hosted game, applied via the "maxplayers" command before the map starts. Must not exceed the selected map\'s own player capacity.');
     this._cvars.quiettime = serverEngineAPI.RegisterCvar('hw_quiet_time', '90', 0, 'Duration of quiet phase in seconds. During quiet phase players can buy items.');
     this._cvars.normaltime = serverEngineAPI.RegisterCvar('hw_normal_time', '90', 0, 'How many seconds of normal phase before action phase. Set to 0 to disable normal phase.');
     this._cvars.maxmonstersalive = serverEngineAPI.RegisterCvar('hw_monsters_alive', '20', 0, 'Maximum number of monsters alive at a time per player. 0 = no limit.');

@@ -76,6 +76,7 @@ interface SessionRowInfo {
   readonly hostname: string;
   readonly map: string;
   readonly roundLabel: string | null;
+  readonly full: boolean;
 }
 
 /**
@@ -264,7 +265,14 @@ export default class MainMenu {
           let textX = x;
 
           if (sessionRow) {
-            Menu.PrintWhite(x, y, sessionRow.hostname);
+            // A full session's hostname is dimmed the same way a disabled Action's own label is
+            // (see Action.draw's enabled ? PrintWhite : Print) -- the row's join Action already
+            // carries that convention for its label; the hostname line just needs to match it.
+            if (sessionRow.full) {
+              Menu.Print(x, y, sessionRow.hostname);
+            } else {
+              Menu.PrintWhite(x, y, sessionRow.hostname);
+            }
 
             const picture = MainMenu.#mapPictures.get(sessionRow.map);
 
@@ -367,13 +375,16 @@ export default class MainMenu {
       MainMenu.#maxSessionContentWidth = 0;
 
       for (const session of sessions) {
+        const isFull = session.currentPlayers >= session.maxPlayers;
+
         const label = MainMenu.#mapLabels.get(session.map) ?? session.map;
         const pingLabel = MainMenu.#formatPing(session);
-        const fullLabel = `${label} [${session.currentPlayers}/${session.maxPlayers}] ${pingLabel}`;
+        const fullLabel = `${label} [${session.currentPlayers}/${session.maxPlayers}] ${pingLabel}` + (isFull ? ' FULL!' : '');
         const hostname = MainMenu.#truncateHostname(session.hostname);
 
         mainPage.items.push(new Action({
           label: fullLabel,
+          enabled: !isFull,
           action: () => { joinSession(session.sessionId); },
         }));
 
@@ -389,7 +400,7 @@ export default class MainMenu {
           ? `round ${roundCurrent}/${roundLimit}`
           : null;
 
-        MainMenu.#sessionRows.push({ hostname, map: session.map, roundLabel });
+        MainMenu.#sessionRows.push({ hostname, map: session.map, roundLabel, full: isFull });
       }
     };
 

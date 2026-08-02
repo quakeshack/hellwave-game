@@ -56,11 +56,13 @@ class StartGameHandler implements StartGameInterface {
   }
 
   startMultiplayerGame(mapname: string): void {
+    const maxplayers = this.engine.GetCvar('hw_maxplayers')?.value ?? 4;
+
     this.engine.AppendConsoleText(`
       deathmatch 0
       coop 1
       samelevel 1
-      maxplayers 4
+      maxplayers ${maxplayers}
       map "${mapname}"
     `);
   }

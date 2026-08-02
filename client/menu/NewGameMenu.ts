@@ -26,6 +26,7 @@ export default class NewGameMenu {
   static #mapPictures = new Map<string, GLTexture>();
   static #selectedMapName = '';
   static #selectedMapLabel = '';
+  static #selectedMapMaxPlayers = 0;
 
   static getSelectedMapName(): string {
     return NewGameMenu.#selectedMapName;
@@ -33,6 +34,10 @@ export default class NewGameMenu {
 
   static getSelectedMapLabel(): string {
     return NewGameMenu.#selectedMapLabel;
+  }
+
+  static getSelectedMapMaxPlayers(): number {
+    return NewGameMenu.#selectedMapMaxPlayers;
   }
 
   static getMapPicture(name: string): GLTexture | undefined {
@@ -68,6 +73,7 @@ export default class NewGameMenu {
       action: () => {
         NewGameMenu.#selectedMapName = map.name;
         NewGameMenu.#selectedMapLabel = map.label;
+        NewGameMenu.#selectedMapMaxPlayers = map.maxplayers;
         Menu.Push('hellwave_newgame_settings');
       },
     }));

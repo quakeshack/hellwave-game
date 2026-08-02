@@ -142,6 +142,22 @@ void describe('Hellwave live session list', () => {
     engine.Menu.Pop();
   });
 
+  void test('disables (and does not gray out) sessions with an open slot, and disables ones that are full', () => {
+    const channel = createMockSessionsChannel([
+      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 4, maxPlayers: 4, settings: {} },
+      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 3, maxPlayers: 4, settings: {} },
+    ]);
+    const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
+      Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
+    });
+
+    engine.Menu.Push('main');
+
+    assert.deepEqual(getMainPage().items.slice(4).map((item) => item.enabled), [false, true]);
+
+    engine.Menu.Pop();
+  });
+
   void test('shows "No active games." when the list is empty', () => {
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu); // default mock delivers []
 
