@@ -5,7 +5,7 @@ import Vector from '../../../shared/Vector.ts';
 
 await import('../../id1/GameAPI.ts');
 
-const { formatMoney, solid } = await import('../Defs.ts');
+const { formatMoney, items, solid } = await import('../Defs.ts');
 const { phases } = await import('../Phases.ts');
 const hellwaveItemsModule = await import('../entity/Items.ts');
 const hellwaveZonesModule = await import('../entity/Zones.ts');
@@ -81,10 +81,19 @@ void describe('HellwaveBackpackEntity', () => {
     assert.deepEqual(HellwaveBackpackEntity.serializableFields, ['money']);
 
     backpack.money = 250;
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1)), [formatMoney(250)]);
+    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), [formatMoney(250)]);
 
     backpack.money = 0;
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1)), []);
+    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), []);
+  });
+
+  void test('forwards the pre-pickup item flags so an already owned weapon is not announced again', () => {
+    const backpack = new HellwaveBackpackEntity(null, createMockGameAPI()).initializeEntity();
+    backpack.items = items.IT_SHOTGUN;
+    backpack.money = 250;
+
+    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), ['Shotgun', formatMoney(250)]);
+    assert.deepEqual(backpack._collectItems(createPlayerStub(1), items.IT_SHOTGUN), [formatMoney(250)]);
   });
 });
 

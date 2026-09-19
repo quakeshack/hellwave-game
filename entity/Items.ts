@@ -12,10 +12,13 @@ export class HellwaveBackpackEntity extends Id1BackpackEntity {
   @serializable money = 0;
 
   /**
+   * Describes what was newly granted by this pickup, plus the money the backpack carried.
+   * @param playerEntity The player who picked up the backpack.
+   * @param priorItems The player's item flags from before this pickup was applied.
    * @returns Collected item labels.
    */
-  protected override _collectItems(playerEntity: PlayerEntity): string[] {
-    const collectedItems = super._collectItems(playerEntity);
+  protected override _collectItems(playerEntity: PlayerEntity, priorItems: number): string[] {
+    const collectedItems = super._collectItems(playerEntity, priorItems);
 
     if (this.money > 0) {
       collectedItems.push(formatMoney(this.money));
