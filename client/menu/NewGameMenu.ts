@@ -1,6 +1,6 @@
 import type { ClientEngineAPI, GLTexture, MenuItem } from '../../../../shared/GameInterfaces.ts';
 
-import { ServerGameAPI } from '../../GameAPI.ts';
+import { MAP_CATALOG } from '../MapCatalog.ts';
 
 import MenuCommon, { LABEL_LINE_HEIGHT } from './MenuCommon.ts';
 
@@ -15,7 +15,7 @@ const CARD_LABEL_Y = CARDS_START_Y + CARD_WIDTH + 6;
 
 /**
  * The "select a map" screen New Game leads to ('hellwave_newgame'): one card per curated map
- * (screenshot + name, `ServerGameAPI.GetMapList()`). Picking a card opens the per-map settings
+ * (screenshot + name, `MAP_CATALOG`). Picking a card opens the per-map settings
  * screen (`NewGameSettingsMenu`), not this class -- built on `ListPage` rather than plain
  * `MenuPage` so Left/Right (not just Up/Down) move between the side-by-side cards, matching the
  * original sketch's annotation for exactly that.
@@ -52,7 +52,7 @@ export default class NewGameMenu {
     const { Action, ListPage } = Menu;
     const viewport = MenuCommon.getViewport(engineAPI);
 
-    const maps = ServerGameAPI.GetMapList() ?? [];
+    const maps = MAP_CATALOG;
 
     for (const map of maps) {
       const picturePath = map.pictures[0];

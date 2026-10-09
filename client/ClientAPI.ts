@@ -6,7 +6,7 @@ import type Vector from '../../../shared/Vector.ts';
 import { ClientGameAPI as Id1ClientGameAPI, type Id1Clientdata } from '../../id1/client/ClientAPI.ts';
 import type { Id1MenuOptions } from '../../id1/client/Menu.ts';
 import { clientEvent, clientEventName } from '../Defs.ts';
-import { ServerGameAPI } from '../GameAPI.ts';
+import { MAP_CATALOG } from './MapCatalog.ts';
 
 import HellwaveHUD from './HUD.ts';
 import HellwaveMenu from './menu/Menu.ts';
@@ -35,15 +35,7 @@ class StartGameHandler implements StartGameInterface {
   }
 
   startSingleplayerGame(): void {
-    const mapList = ServerGameAPI.GetMapList();
-
-    console.assert(mapList !== null, 'Hellwave server map list must exist');
-
-    if (mapList === null) {
-      return;
-    }
-
-    const maps = mapList.map((map) => map.name);
+    const maps = MAP_CATALOG.map((map) => map.name);
 
     console.assert(maps.length > 0, 'Hellwave must expose at least one map');
 

@@ -1,4 +1,4 @@
-import type { CommonEngineAPI, Cvar, MapDetails, ServerEdict, ServerEngineAPI, StartServerListEntry } from '../../shared/GameInterfaces.ts';
+import type { Cvar, ServerEdict, ServerEngineAPI } from '../../shared/GameInterfaces.ts';
 
 import { cvarFlags } from '../../shared/Defs.ts';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
@@ -183,44 +183,6 @@ class HellwaveServerGameAPI extends id1ServerGameAPI {
 
     // Make sure the round manager is subscribed after a map start or changelevel.
     this.manager.subscribeToEvents();
-  }
-
-  static override GetMapList(): MapDetails[] {
-    return [
-      { name: 'hw_doom', label: 'Doomed computer station', maxplayers: 4, pictures: ['maps/hw_doom.jpg'] },
-      { name: 'hw_e1m2', label: 'Castle of the damned', maxplayers: 4, pictures: ['maps/hw_e1m2.jpg'] },
-    ];
-  }
-
-  static override GetStartServerList(): StartServerListEntry[] {
-    return [
-      {
-        label: 'Castle of the Damned',
-        callback(engineAPI: CommonEngineAPI): void {
-          engineAPI.AppendConsoleText(`
-          hostname "Hellwave: Castle of the Damned"
-          deathmatch 0
-          coop 1
-          samelevel 1
-          maxplayers 4
-          map hw_e1m2
-        `);
-        },
-      },
-      {
-        label: 'Doomed Computer Station',
-        callback(engineAPI: CommonEngineAPI): void {
-          engineAPI.AppendConsoleText(`
-          hostname "Hellwave: Doomed Computer Station"
-          deathmatch 0
-          coop 1
-          samelevel 1
-          maxplayers 4
-          map hw_doom
-        `);
-        },
-      },
-    ];
   }
 }
 

@@ -1,6 +1,6 @@
 import type { Action, ClientEngineAPI, DiscoveredSession, GLTexture, MenuItem } from '../../../../shared/GameInterfaces.ts';
 
-import { ServerGameAPI } from '../../GameAPI.ts';
+import { MAP_CATALOG } from '../MapCatalog.ts';
 
 import MenuCommon, { LABEL_LINE_HEIGHT } from './MenuCommon.ts';
 import ProfileMenu from './ProfileMenu.ts';
@@ -203,7 +203,7 @@ export default class MainMenu {
 
     // Same up-front load-and-cache recipe as NewGameMenu's map-picker cards, keyed by map name so
     // a session row can resolve its thumbnail and label with a plain lookup once loading resolves.
-    for (const map of ServerGameAPI.GetMapList() ?? []) {
+    for (const map of MAP_CATALOG) {
       MainMenu.#mapLabels.set(map.name, map.label);
 
       const picturePath = map.pictures[0];

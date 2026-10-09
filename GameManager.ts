@@ -11,7 +11,7 @@ import BaseMonster from '../id1/entity/monster/BaseMonster.ts';
 import DogMonsterEntity from '../id1/entity/monster/Dog.ts';
 import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.ts';
 import OgreMonsterEntity from '../id1/entity/monster/Ogre.ts';
-import ShalrathMonsterEntity, { ShalrathMissileEntity } from '../id1/entity/monster/Shalrath.ts';
+import ShalrathMonsterEntity from '../id1/entity/monster/Shalrath.ts';
 import ShamblerMonsterEntity from '../id1/entity/monster/Shambler.ts';
 import { ArmyEnforcerMonster, ArmySoldierMonster } from '../id1/entity/monster/Soldier.ts';
 import WizardMonsterEntity from '../id1/entity/monster/Wizard.ts';
