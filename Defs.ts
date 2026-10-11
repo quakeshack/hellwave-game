@@ -15,7 +15,6 @@ export {
 export {
   clientEventName,
   colors,
-  contentShift,
   damage,
   dead,
   deathType,

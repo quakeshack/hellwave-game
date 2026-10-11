@@ -151,7 +151,12 @@ void describe('buy menu as a real menu page', () => {
     const postProcessSetStacks = [];
     const { engine } = createBuyMenuHud({ buyzone: 1, money: 0 }, {
       PostProcess: {
-        setStack(stack) { postProcessSetStacks.push(stack); },
+        // the tints of the HUD have channels of their own, this is about the buy menu's
+        setStack(stack, options) {
+          if (options?.channel === undefined) {
+            postProcessSetStacks.push(stack);
+          }
+        },
         clearStack() { postProcessSetStacks.push(null); },
         hasStack() { return postProcessSetStacks.at(-1) !== null; },
       },

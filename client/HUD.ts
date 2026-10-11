@@ -5,7 +5,7 @@ import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
 
 import { MessageBag, Q1HUD } from '../../id1/client/HUD.ts';
-import { clientEvent, clientEventName, colors, contentShift, formatMoney } from '../Defs.ts';
+import { clientEvent, clientEventName, colors, formatMoney } from '../Defs.ts';
 import type { BuyMenuAvailabilityContext } from '../entity/Player.ts';
 import { phaseLabels, phases } from '../Phases.ts';
 
@@ -118,7 +118,7 @@ export default class HellwaveHUD extends Q1HUD {
         return;
       }
 
-      this.engine.ContentShift(contentShift.info, new Vector(...this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH)), 0.2);
+      this.colorShifts.flash('info', new Vector(...this.engine.IndexToRGB(colors.HUD_CSHIFT_BONUSFLASH)), 0.2);
 
       switch (value) {
         case phases.quiet:

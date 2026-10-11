@@ -48,7 +48,7 @@ void describe('Hellwave HUD', () => {
 
       assert.equal(game.sfx.phase.normal[0].playCount, 1);
       assert.deepEqual(hud.inventory.money, [250, null, 0]);
-      assert.deepEqual(engine.contentShifts.length, 1);
+      assert.deepEqual(engine.postProcessPulses.map(({ descriptor }) => descriptor.key), ['info']);
       assert.ok(engine.drawStrings.some(({ text }) => text === 'Spectating... Waiting for next round'));
     } finally {
       HellwaveHUD.Shutdown(engine);
