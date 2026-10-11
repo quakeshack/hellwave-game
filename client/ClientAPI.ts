@@ -1,4 +1,4 @@
-import type { ClientEngineAPI, GLTexture, SFX, StartGameInterface } from '../../../shared/GameInterfaces.ts';
+import type { ClientDamageEvent, ClientEngineAPI, Cvar, GLTexture, SFX, StartGameInterface, ViewInput, ViewResult } from '../../../shared/GameInterfaces.ts';
 
 import sampleBSpline from '../../../shared/BSpline.ts';
 import type Vector from '../../../shared/Vector.ts';
@@ -26,6 +26,12 @@ interface HellwavePhaseSfx {
 interface HellwaveClientSfx {
   phase: HellwavePhaseSfx;
 }
+
+/** The most a hit lifts the view in Hellwave's own first-person view, in degrees. */
+const VIEW_KICK_MAX = 10;
+
+/** How fast that kick falls off, in degrees per second. */
+const VIEW_KICK_DECAY = 12;
 
 class StartGameHandler implements StartGameInterface {
   readonly engine: ClientEngineAPI;
@@ -93,6 +99,15 @@ export class ClientGameAPI extends Id1ClientGameAPI {
 
   static loadingScreen: GLTexture | null = null;
 
+  /**
+   * `hw_view`: 0 is the engine's first-person view, 1 is Hellwave's own, a prototype of `ClientGameInterface.calcView`
+   * (a steady eye: no bob, no roll into a strafe, no idle sway, no smoothing of steps, and a hit lifts the view).
+   */
+  static viewVariant: Cvar | null = null;
+
+  /** How far a recent hit lifts the view, in degrees, falling off at `VIEW_KICK_DECAY` degrees per second. */
+  #viewKick = 0;
+
   protected override _newHUD(): HellwaveHUD {
     return new HellwaveHUD(this, this.engine);
   }
@@ -118,8 +133,38 @@ export class ClientGameAPI extends Id1ClientGameAPI {
     super._updateViewModel();
   }
 
+  /**
+   * Hellwave's first-person view when `hw_view` is 1, the engine's own otherwise. The point of this method is to be
+   * the proof that the interface is enough: everything it needs is in `input`, and the result is the eye and the
+   * weapon, with nothing of the engine's internals touched.
+   */
+  calcView(input: ViewInput, result: ViewResult): void {
+    this.#viewKick = Math.max(0, this.#viewKick - input.frametime * VIEW_KICK_DECAY);
+
+    if ((ClientGameAPI.viewVariant?.value ?? 0) === 0) {
+      this.engine.View.calculateDefault(input, result);
+      return;
+    }
+
+    const { origin, viewangles, punchangle, viewheight } = input;
+
+    result.vieworg.setTo(origin[0], origin[1], origin[2] + viewheight);
+    result.viewangles.setTo(
+      viewangles[0] - this.#viewKick + punchangle[0],
+      viewangles[1] + punchangle[1],
+      viewangles[2] + punchangle[2],
+    );
+    result.weaponOrigin.setTo(origin[0], origin[1], origin[2] + viewheight);
+    result.weaponAngles.setTo(-viewangles[0], viewangles[1], viewangles[2]);
+  }
+
   override init(): void {
     super.init();
+
+    // a hit lifts the view for a moment, the amount of the damage that got through, not more than 10 degrees
+    this.engine.eventBus.subscribe('client.damage', (event: ClientDamageEvent): void => {
+      this.#viewKick = Math.min(VIEW_KICK_MAX, this.#viewKick + event.damageReceived * 0.15);
+    });
 
     this.engine.eventBus.subscribe(clientEventName(clientEvent.NAV_HINT), (...waypoints: readonly Vector[]): void => {
       const points = sampleBSpline([...waypoints], Math.min(100, waypoints.length * 2));
@@ -137,6 +182,8 @@ export class ClientGameAPI extends Id1ClientGameAPI {
 
   static override Init(engineAPI: ClientEngineAPI): void {
     super.Init(engineAPI);
+
+    this.viewVariant = engineAPI.RegisterCvar('hw_view', '0');
 
     HellwaveMenu.Init(engineAPI);
 

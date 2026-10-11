@@ -144,3 +144,102 @@ void describe('Hellwave client API', () => {
     assert.equal(engine.commands.has('hw_buymenu'), false);
   });
 });
+
+void describe('Hellwave first-person view (prototype of calcView)', () => {
+  /**
+   * What the engine gives a game to calculate the view from, and where it puts the result.
+   * @returns {{ input: object, result: object }} Both, with the vectors filled in.
+   */
+  function createViewFrame() {
+    return {
+      input: {
+        origin: new Vector(100, 200, 300),
+        angles: new Vector(0, 90, 0),
+        velocity: new Vector(250, 0, 0),
+        viewangles: new Vector(10, 45, 3),
+        punchangle: new Vector(1, 2, 0),
+        viewheight: 22,
+        onground: true,
+        time: 12,
+        frametime: 0.1,
+        viewsize: 120,
+      },
+      result: {
+        vieworg: new Vector(),
+        viewangles: new Vector(),
+        weaponOrigin: new Vector(),
+        weaponAngles: new Vector(),
+      },
+    };
+  }
+
+  /**
+   * Builds the game with `hw_view` set.
+   * @param {string} variant The value of `hw_view`.
+   * @returns {{ engine: ReturnType<typeof createMockClientEngine>, clientGame: InstanceType<typeof ClientGameAPI> }} Both.
+   */
+  function create(variant) {
+    const engine = createMockClientEngine();
+
+    ClientGameAPI.Init(engine);
+    engine.SetCvar('hw_view', variant);
+
+    const clientGame = new ClientGameAPI(engine);
+    clientGame.init();
+
+    return { engine, clientGame };
+  }
+
+  void test('takes the engine\'s view while hw_view is 0', () => {
+    const { clientGame } = create('0');
+    const { input, result } = createViewFrame();
+
+    clientGame.calcView(input, result);
+
+    assert.equal(result.defaulted, true);
+  });
+
+  void test('puts the eye at the origin and view height, with no bob, roll or sway, when hw_view is 1', () => {
+    const { clientGame } = create('1');
+    const { input, result } = createViewFrame();
+
+    clientGame.calcView(input, result);
+
+    assert.equal(result.defaulted, undefined);
+    assert.deepEqual(Array.from(result.vieworg), [100, 200, 322]);
+    // the view angles as the player holds them, and the punch of the server on top; no roll from the 250 units of
+    // speed along the player's right axis
+    assert.deepEqual(Array.from(result.viewangles), [11, 47, 3]);
+    assert.deepEqual(Array.from(result.weaponOrigin), [100, 200, 322]);
+    assert.deepEqual(Array.from(result.weaponAngles), [-10, 45, 3]);
+  });
+
+  void test('lifts the view for a hit, by what got through, and lets it down again', () => {
+    const { engine, clientGame } = create('1');
+    const { input, result } = createViewFrame();
+
+    engine.eventBus.publish('client.damage', { damageReceived: 40, armorLost: 0, attackOrigin: new Vector() });
+    clientGame.calcView(input, result);
+    // 40 * 0.15 = 6 degrees, less the 1.2 that fell off during this frame
+    assert.ok(Math.abs(result.viewangles[0] - (11 - 4.8)) < 1e-4);
+
+    for (let frame = 0; frame < 10; frame++) {
+      clientGame.calcView(input, result);
+    }
+
+    assert.equal(result.viewangles[0], 11);
+  });
+
+  void test('never lifts it by more than 10 degrees', () => {
+    const { engine, clientGame } = create('1');
+    const { input, result } = createViewFrame();
+    input.frametime = 0;
+
+    for (let hit = 0; hit < 20; hit++) {
+      engine.eventBus.publish('client.damage', { damageReceived: 100, armorLost: 0, attackOrigin: new Vector() });
+    }
+    clientGame.calcView(input, result);
+
+    assert.equal(result.viewangles[0], 11 - 10);
+  });
+});
