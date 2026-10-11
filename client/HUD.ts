@@ -1,5 +1,5 @@
 import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
-import type { ClientEdict, ClientEngineAPI, PostProcessStack } from '../../../shared/GameInterfaces.ts';
+import type { ClientEdict, ClientEngineAPI, ClientSerializableType, PostProcessStack } from '../../../shared/GameInterfaces.ts';
 
 import Q from '../../../shared/Q.ts';
 import Vector from '../../../shared/Vector.ts';
@@ -86,7 +86,7 @@ export default class HellwaveHUD extends Q1HUD {
     this.#buyMenu = new HellwaveBuyMenu(this, this.engine);
     this.#buyMenu.register();
 
-    this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: number | string | boolean | null): void => {
+    this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: ClientSerializableType): void => {
       switch (field) {
         // Opening the buy menu is handled by the `hw_buymenu` command (see
         // `HellwaveBuyMenu.Init`) -- the server only tells us whether the player is physically in
