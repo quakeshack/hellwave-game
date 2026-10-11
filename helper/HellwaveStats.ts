@@ -5,6 +5,7 @@ import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.t
 
 import { clientEvent } from '../Defs.ts';
 import { phases, type HellwavePhase } from '../Phases.ts';
+import { serverEvents } from '../Events.ts';
 
 /**
  * Tracks Hellwave-specific round and squad state and mirrors it to clients.
@@ -35,7 +36,7 @@ export default class HellwaveStats extends GameStats {
   override subscribeToEvents(): void {
     super.subscribeToEvents();
 
-    this.engine.eventBus.subscribe('game.round.started', (roundNumber: number, roundTotal: number, roundMonstersLimit: number): void => {
+    serverEvents(this.engine).subscribe('game.round.started', (roundNumber: number, roundTotal: number, roundMonstersLimit: number): void => {
       this.round_current = roundNumber;
       this.round_total = roundTotal;
       this.round_monsters_limit = roundMonstersLimit;
@@ -50,21 +51,21 @@ export default class HellwaveStats extends GameStats {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_killed', this.monsters_killed);
     });
 
-    this.engine.eventBus.subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
+    serverEvents(this.engine).subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
       if (this.phase !== newPhase) {
         this.phase = newPhase;
         this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase', this.phase);
       }
     });
 
-    this.engine.eventBus.subscribe('game.phase.endingtime', (newEndingTime: number): void => {
+    serverEvents(this.engine).subscribe('game.phase.endingtime', (newEndingTime: number): void => {
       if (this.phase_ending_time !== newEndingTime) {
         this.phase_ending_time = newEndingTime;
         this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'phase_ending_time', this.phase_ending_time);
       }
     });
 
-    this.engine.eventBus.subscribe('game.monster.spawned', () => {
+    serverEvents(this.engine).subscribe('game.monster.spawned', () => {
       this.engine.BroadcastClientEvent(true, clientEvent.STATS_UPDATED, 'monsters_total', this.monsters_total);
     });
   }

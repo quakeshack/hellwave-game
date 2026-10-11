@@ -7,6 +7,7 @@ import Vector from '../../shared/Vector.ts';
 import BaseEntity from '../id1/entity/BaseEntity.ts';
 import { BaseItemEntity, HealthItemEntity, ItemCellsEntity, ItemShellsEntity, ItemSpikesEntity, LightArmorEntity, SuperDamageEntity, WEAPON_BIG2 } from '../id1/entity/Items.ts';
 import { TeleportEffectEntity } from '../id1/entity/Misc.ts';
+import type { PlayerEntity } from '../id1/entity/Player.ts';
 import BaseMonster from '../id1/entity/monster/BaseMonster.ts';
 import DogMonsterEntity from '../id1/entity/monster/Dog.ts';
 import { HellKnightMonster, KnightMonster } from '../id1/entity/monster/Knights.ts';
@@ -26,6 +27,7 @@ import { HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
 import { HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
 import TarbabyMonsterEntity from '../id1/entity/monster/Tarbaby.ts';
 import DemonMonster from '../id1/entity/monster/Demon.ts';
+import { serverEvents } from './Events.ts';
 
 interface MonsterSpawnChoice {
   readonly classname: string;
@@ -252,7 +254,7 @@ export default class GameManager {
   }
 
   subscribeToEvents(): void {
-    this.engine.eventBus.subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
+    serverEvents(this.engine).subscribe('game.phase.changed', (newPhase: HellwavePhase): void => {
       if (newPhase === phases.quiet) {
         this.openRandomShop();
       } else if (newPhase === phases.normal) {
@@ -260,7 +262,7 @@ export default class GameManager {
       }
     });
 
-    this.engine.eventBus.subscribe('game.player.died', (player: HellwavePlayer, attacker: BaseEntity): void => {
+    serverEvents(this.engine).subscribe('game.player.died', (player: PlayerEntity, attacker: BaseEntity): void => {
       this.checkSquadStatus(null);
 
       if (attacker instanceof HellwavePlayer && attacker !== player) {
@@ -268,7 +270,12 @@ export default class GameManager {
       }
     });
 
-    this.engine.eventBus.subscribe('game.monster.killed', (monster: BaseMonster, attacker: BaseEntity): void => {
+    serverEvents(this.engine).subscribe('game.monster.killed', (monster: BaseEntity, attacker: BaseEntity): void => {
+      // id1 publishes any entity with `FL_MONSTER`, which in practice is a `BaseMonster`
+      if (!(monster instanceof BaseMonster)) {
+        return;
+      }
+
       if (attacker instanceof HellwavePlayer) {
         attacker.updateMoney(100);
         attacker.frags++;
@@ -320,7 +327,7 @@ export default class GameManager {
     let bossesRemaining = bossMarkers.length;
     const multipleBosses = bossesRemaining > 1;
 
-    this.engine.eventBus.subscribe('game.monster.killed', (monster: BaseMonster): void => {
+    serverEvents(this.engine).subscribe('game.monster.killed', (monster: BaseEntity): void => {
       // only pay attention when in bossfight phase
       if (this.phase !== phases.bossfight) {
         return;
@@ -758,7 +765,7 @@ export default class GameManager {
     this.available_goodies = Math.ceil(this.round_monsters_limit / 10) * clients;
     this.available_goodies_quad = Math.floor(this.round_monsters_limit / 30);
 
-    this.engine.eventBus.publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
+    serverEvents(this.engine).publish('game.round.started', this.round_number, this.round_number_limit, this.round_monsters_limit);
     this.engine.SetCvar('hw_round_current', String(this.round_number));
 
     this.startQuietPhase();
@@ -807,8 +814,8 @@ export default class GameManager {
     this.phase = phases.quiet;
     this.phase_ending_time = this.game.time + this.game.quiettime;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', this.phase_ending_time);
 
     this.engine.PlayTrack(0);
   }
@@ -819,8 +826,8 @@ export default class GameManager {
     this.phase = phases.normal;
     this.phase_ending_time = this.game.time + this.game.normaltime;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', this.phase_ending_time);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', this.phase_ending_time);
 
     const worldspawn = this.game.worldspawn!;
     console.assert(worldspawn !== null, 'Hellwave normal phase requires a worldspawn');
@@ -832,8 +839,8 @@ export default class GameManager {
     this.phase = phases.action;
     this.phase_ending_time = Infinity;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', 0);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', 0);
   }
 
   protected startGameOverPhase(): void {
@@ -842,8 +849,8 @@ export default class GameManager {
     this.phase = phases.gameover;
     this.phase_ending_time = this.game.time + 5.0;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', 0);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', 0);
   }
 
   protected startVictoryPhase(): void {
@@ -852,8 +859,8 @@ export default class GameManager {
     this.phase = phases.victory;
     this.phase_ending_time = this.game.time + 30.0;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', 0);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', 0);
   }
 
   protected startBossFightPhase(): void {
@@ -862,8 +869,8 @@ export default class GameManager {
     this.phase = phases.bossfight;
     this.phase_ending_time = Infinity;
 
-    this.engine.eventBus.publish('game.phase.changed', this.phase);
-    this.engine.eventBus.publish('game.phase.endingtime', 0);
+    serverEvents(this.engine).publish('game.phase.changed', this.phase);
+    serverEvents(this.engine).publish('game.phase.endingtime', 0);
   }
 
   clientConnected(_playerEntity: HellwavePlayer): void {

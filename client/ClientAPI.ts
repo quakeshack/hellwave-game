@@ -11,6 +11,7 @@ import { MAP_CATALOG } from './MapCatalog.ts';
 import HellwaveHUD from './HUD.ts';
 import HellwaveMenu from './menu/Menu.ts';
 import { generateRandomPlayerName } from './NameGenerator.ts';
+import { clientEvents } from '../Events.ts';
 
 interface HellwaveClientdata extends Id1Clientdata {
   money: number;
@@ -162,11 +163,11 @@ export class ClientGameAPI extends Id1ClientGameAPI {
     super.init();
 
     // a hit lifts the view for a moment, the amount of the damage that got through, not more than 10 degrees
-    this.engine.eventBus.subscribe('client.damage', (event: ClientDamageEvent): void => {
+    clientEvents(this.engine).subscribe('client.damage', (event: ClientDamageEvent): void => {
       this.#viewKick = Math.min(VIEW_KICK_MAX, this.#viewKick + event.damageReceived * 0.15);
     });
 
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.NAV_HINT), (...waypoints: readonly Vector[]): void => {
+    clientEvents(this.engine).subscribe(clientEventName(clientEvent.NAV_HINT), (...waypoints: readonly Vector[]): void => {
       const points = sampleBSpline([...waypoints], Math.min(100, waypoints.length * 2));
 
       for (let i = 1; i < points.length; i++) {

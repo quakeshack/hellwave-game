@@ -12,6 +12,7 @@ import { phaseLabels, phases } from '../Phases.ts';
 import type { ClientGameAPI } from './ClientAPI.ts';
 import HellwaveBuyMenu from './menu/BuyMenu.ts';
 import { HellwaveStatsInfo } from './Sync.ts';
+import { clientEvents } from '../Events.ts';
 
 type MoneyBalanceState = [number | null, number | null, number];
 
@@ -86,7 +87,7 @@ export default class HellwaveHUD extends Q1HUD {
     this.#buyMenu = new HellwaveBuyMenu(this, this.engine);
     this.#buyMenu.register();
 
-    this.engine.eventBus.subscribe('client.clientdata.field-changed', (field: string, value: ClientSerializableType): void => {
+    clientEvents(this.engine).subscribe('client.clientdata.field-changed', (field: string, value: ClientSerializableType): void => {
       switch (field) {
         // Opening the buy menu is handled by the `hw_buymenu` command (see
         // `HellwaveBuyMenu.Init`) -- the server only tells us whether the player is physically in
@@ -113,7 +114,7 @@ export default class HellwaveHUD extends Q1HUD {
       }
     });
 
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.STATS_UPDATED), (slot: string, value: number | string): void => {
+    clientEvents(this.engine).subscribe(clientEventName(clientEvent.STATS_UPDATED), (slot: string, value: number | string): void => {
       if (slot !== 'phase') {
         return;
       }
@@ -140,12 +141,12 @@ export default class HellwaveHUD extends Q1HUD {
       this.engine.PostProcess.clearStack();
     });
 
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance: number): void => {
+    clientEvents(this.engine).subscribe(clientEventName(clientEvent.MONEY_UPDATE), (newBalance: number): void => {
       this.inventory.money = [newBalance, this.inventory.money[0], this.engine.CL.gametime];
       this.#buyMenu.refreshIfOpen();
     });
 
-    this.engine.eventBus.subscribe(clientEventName(clientEvent.BUY_MESSAGE), (message: string): void => {
+    clientEvents(this.engine).subscribe(clientEventName(clientEvent.BUY_MESSAGE), (message: string): void => {
       this.#buyMenu.showFeedback(message);
     });
   }
