@@ -7,7 +7,7 @@ import type { HellwavePhase } from './Phases.ts';
 /**
  * The events the server side of Hellwave publishes on `ServerEngineAPI.eventBus`, on top of the ones of id1 (its code
  * runs in Hellwave too, and Hellwave listens to them). Documented in `docs/events.md` and kept equal to it by
- * `test/events-docs.test.mjs`.
+ * `test/hellwave-events-docs.test.ts`.
  */
 export interface HellwaveServerEvents extends Id1ServerEvents {
   'game.phase.changed': [phase: HellwavePhase];
