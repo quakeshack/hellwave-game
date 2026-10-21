@@ -15,8 +15,8 @@ const ricochetSounds = [
 
 @serializableObject
 export class HellwaveSuperspike extends Id1Superspike {
-  @serializable private _direction = new Vector();
-  @serializable private _richochetsLeft = 3;
+  @serializable protected _direction = new Vector();
+  @serializable protected _richochetsLeft = 3;
 
   protected override _handleImpact(touchedByEntity: BaseEntity): void {
     // Make sure we get removed if we stop moving for whatever reason.
