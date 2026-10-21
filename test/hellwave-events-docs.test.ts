@@ -31,7 +31,7 @@ function documentedNames() {
 
 void describe('hellwave docs/events.md', () => {
   void test('documents every event Hellwave adds to id1\'s, and nothing else', () => {
-    const inherited = new Set(Object.values(id1ClientEvent).filter((value) => typeof value === 'number'));
+    const inherited = new Set<unknown>(Object.values(id1ClientEvent).filter((value) => typeof value === 'number'));
     // the object spreads id1's enum, whose reverse mapping (opcode to name) comes along: names are not opcodes
     const ownOpcodes = Object.values(clientEvent).filter((opcode) => typeof opcode === 'number' && !inherited.has(opcode));
     const published = [

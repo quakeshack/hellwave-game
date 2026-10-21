@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 
 import { K } from '../../../../../shared/Keys.ts';
 import Vector from '../../../../../shared/Vector.ts';
-import { createMainMenuRig } from './fixtures.mjs';
+import { createMainMenuRig, pressItem, layoutOf } from './fixtures.ts';
 
 await import('../../../../id1/GameAPI.ts');
 
@@ -24,10 +24,10 @@ void describe('Hellwave new game map picker', () => {
     const page = getNewGamePage();
 
     // Cards: hw_doom at x=[165,305), hw_e1m2 at x=[335,475), both y starting at 70.
-    assert.equal(page.layout.hitTest(page.items, 200, 150), 0);
-    assert.equal(page.layout.hitTest(page.items, 400, 150), 1);
-    assert.equal(page.layout.hitTest(page.items, 320, 150), null); // the gap
-    assert.equal(page.layout.hitTest(page.items, 200, 900), null); // below every card
+    assert.equal(layoutOf(page).hitTest(page.items, 200, 150), 0);
+    assert.equal(layoutOf(page).hitTest(page.items, 400, 150), 1);
+    assert.equal(layoutOf(page).hitTest(page.items, 320, 150), null); // the gap
+    assert.equal(layoutOf(page).hitTest(page.items, 200, 900), null); // below every card
   });
 
   void test('draws a hover border around only the focused card', () => {
@@ -36,7 +36,7 @@ void describe('Hellwave new game map picker', () => {
     const hoverColor = new Vector(0.733, 0.733, 0.733);
 
     engine.drawRects.length = 0;
-    page.layout.draw(page.items, 0);
+    layoutOf(page).draw(page.items, 0);
 
     assert.equal(engine.drawRects.length, 4); // one hollow border: top/bottom/left/right
     for (const rect of engine.drawRects) {
@@ -44,7 +44,7 @@ void describe('Hellwave new game map picker', () => {
     }
 
     engine.drawRects.length = 0;
-    page.layout.draw(page.items, 1); // second card focused instead
+    layoutOf(page).draw(page.items, 1); // second card focused instead
 
     assert.equal(engine.drawRects.length, 4); // still exactly one border, now around the other card
   });
@@ -63,8 +63,8 @@ void describe('Hellwave new game map picker', () => {
       assert.ok(item.label.length > 15, `expected "${item.label}" to actually need wrapping for this test to mean anything`);
     }
 
-    assert.equal(page.layout.hitTest(page.items, 200, 228), 0);
-    assert.equal(page.layout.hitTest(page.items, 400, 228), 1);
+    assert.equal(layoutOf(page).hitTest(page.items, 200, 228), 0);
+    assert.equal(layoutOf(page).hitTest(page.items, 400, 228), 1);
   });
 
   void test('MenuCommon.wrapLabel never splits a word, even when the label is much longer than two card widths', () => {
@@ -87,7 +87,7 @@ void describe('Hellwave new game map picker', () => {
   void test('picking a map opens the per-map settings screen instead of starting it directly', () => {
     const { calls, getNewGamePage, getNewGameSettingsPage } = createMainMenuRig(HellwaveMenu);
 
-    getNewGamePage().items[0].action(); // hw_doom
+    pressItem(getNewGamePage(), 0); // hw_doom
 
     assert.deepEqual(calls.push, ['hellwave_newgame_settings']);
     assert.equal(calls.forceClose, 0);

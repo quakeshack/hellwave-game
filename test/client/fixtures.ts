@@ -1,11 +1,19 @@
-import { createMockSound } from '../../../id1/test/client/fixtures.ts';
+import type { ClientGameAPI } from '../../client/ClientAPI.ts';
+import { createMockSound, type MockClientEngine, type MockSound } from '../../../id1/test/client/fixtures.ts';
+
+export type HellwaveClientdata = ClientGameAPI['clientdata'];
+
+/** The game a Hellwave HUD is built around, typed as the client game API with the sounds a test inspects. */
+export type HellwaveGameStub = ClientGameAPI & {
+  readonly sfx: { readonly phase: { readonly quiet: MockSound[]; readonly normal: MockSound[] } };
+};
 
 /**
  * Create a minimal Hellwave clientdata map for tests.
- * @param {object} overrides Override values.
- * @returns {object} Mock clientdata.
+ * @param overrides Override values.
+ * @returns Mock clientdata.
  */
-export function createClientdata(overrides = {}) {
+export function createClientdata(overrides: Partial<HellwaveClientdata> = {}): HellwaveClientdata {
   return {
     health: 100,
     armorvalue: 0,
@@ -27,11 +35,12 @@ export function createClientdata(overrides = {}) {
 
 /**
  * Create a minimal Hellwave game object for HUD tests.
- * @param {object} engine Mock engine.
- * @param {object} overrides Override values.
- * @returns {object} Mock client game.
+ * @param engine Mock engine.
+ * @param overrides Override values.
+ * @returns Mock client game.
  */
-export function createHellwaveGame(engine, overrides = {}) {
+export function createHellwaveGame(engine: MockClientEngine, overrides: { clientdata?: HellwaveClientdata } = {}): HellwaveGameStub {
+  // The HUD reads the clientdata, the engine, the server info and the phase sounds of the game.
   return {
     clientdata: createClientdata(),
     engine,
@@ -46,5 +55,5 @@ export function createHellwaveGame(engine, overrides = {}) {
       },
     },
     ...overrides,
-  };
+  } as unknown as HellwaveGameStub;
 }

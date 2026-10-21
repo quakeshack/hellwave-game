@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { EventBus } from '../../../engine/common/EventBus.ts';
+import type { ClientGameEventMap, ServerGameEventMap } from '../../../engine/common/EventBus.ts';
+import { createInertEdict, createInertEngineApi, createInertGameApi } from '../../../../test/support/entityMocks.ts';
+import { serializableFieldsOf } from '../../../../test/support/serialization.ts';
+import { asClientEngineAPI } from '../../id1/test/client/fixtures.ts';
+import type { HellwaveClientEvents, HellwaveServerEvents } from '../Events.ts';
+
 await import('../../id1/GameAPI.ts');
 
 const { clientEvent, clientEventName, formatMoney } = await import('../Defs.ts');
@@ -12,62 +19,35 @@ const HellwaveStats = hellwaveStatsModule.default;
 const { HellwaveStatsInfo } = hellwaveSyncModule;
 
 /**
- * Create an event bus with subscribe/publish support.
- * @returns {object} Mock event bus.
- */
-function createEventBus() {
-  const listeners = new Map();
-
-  return {
-    subscribe(eventName, handler) {
-      const handlers = listeners.get(eventName) ?? [];
-      handlers.push(handler);
-      listeners.set(eventName, handlers);
-
-      return () => {
-        const currentHandlers = listeners.get(eventName) ?? [];
-        listeners.set(eventName, currentHandlers.filter((currentHandler) => currentHandler !== handler));
-      };
-    },
-
-    publish(eventName, ...args) {
-      for (const handler of listeners.get(eventName) ?? []) {
-        handler(...args);
-      }
-    },
-  };
-}
-
-/**
- * Create the minimal engine API surface used by the Hellwave stats tests.
- * @returns {object} Mock engine API.
+ * Create the minimal engine API surface used by the Hellwave stats tests, with an event bus that really delivers.
+ * @returns Mock engine API, its bus and what it was asked to send to clients.
  */
 function createServerEngineAPI() {
-  const eventBus = createEventBus();
-  const broadcasts = [];
-  const dispatches = [];
+  const eventBus = new EventBus<ServerGameEventMap & HellwaveServerEvents>('test');
+  const broadcasts: unknown[][] = [];
+  const dispatches: unknown[][] = [];
 
-  return {
+  const engine = createInertEngineApi({
     eventBus,
-    broadcasts,
-    dispatches,
-    BroadcastClientEvent(...args) {
+    BroadcastClientEvent(...args: unknown[]): void {
       broadcasts.push(args);
     },
-    DispatchClientEvent(...args) {
+    DispatchClientEvent(...args: unknown[]): void {
       dispatches.push(args);
     },
-  };
+  });
+
+  return { engine, eventBus, broadcasts, dispatches };
 }
 
 /**
  * Create the minimal client engine API surface used by HellwaveStatsInfo.
- * @returns {object} Mock client engine API.
+ * @returns Mock client engine API and its bus.
  */
 function createClientEngineAPI() {
-  return {
-    eventBus: createEventBus(),
-  };
+  const eventBus = new EventBus<ClientGameEventMap & HellwaveClientEvents>('test');
+
+  return { engine: asClientEngineAPI({ eventBus }), eventBus };
 }
 
 void describe('Hellwave defs', () => {
@@ -85,11 +65,13 @@ void describe('Hellwave defs', () => {
 void describe('HellwaveStats', () => {
   void test('tracks Hellwave-specific serializable fields and inherited stat slots', () => {
     const engineAPI = createServerEngineAPI();
-    const stats = new HellwaveStats({}, engineAPI);
+    const stats = new HellwaveStats(createInertGameApi(), engineAPI.engine);
 
-    assert.ok(Array.isArray(HellwaveStats.serializableFields));
-    assert.ok(Object.isFrozen(HellwaveStats.serializableFields));
-    assert.deepEqual(HellwaveStats.serializableFields, [
+    const fields = serializableFieldsOf(HellwaveStats);
+
+    assert.ok(Array.isArray(fields));
+    assert.ok(Object.isFrozen(fields));
+    assert.deepEqual(fields, [
       'round_current',
       'round_total',
       'squad_standing',
@@ -116,8 +98,8 @@ void describe('HellwaveStats', () => {
 
   void test('publishes round and squad updates and sends extended slots to clients', () => {
     const engineAPI = createServerEngineAPI();
-    const stats = new HellwaveStats({}, engineAPI);
-    const playerEntity = { edict: { num: 7 } };
+    const stats = new HellwaveStats(createInertGameApi(), engineAPI.engine);
+    const playerEntity = { edict: createInertEdict() };
 
     stats.subscribeToEvents();
 
@@ -159,7 +141,7 @@ void describe('HellwaveStats', () => {
 void describe('HellwaveStatsInfo', () => {
   void test('updates hellwave-specific slots from client stat events', () => {
     const engineAPI = createClientEngineAPI();
-    const stats = new HellwaveStatsInfo(engineAPI);
+    const stats = new HellwaveStatsInfo(engineAPI.engine);
 
     engineAPI.eventBus.publish(clientEventName(clientEvent.STATS_INIT), 'round_total', 12);
     engineAPI.eventBus.publish(clientEventName(clientEvent.STATS_INIT), 'round_current', 3);
@@ -180,7 +162,7 @@ void describe('HellwaveStatsInfo', () => {
 
   void test('parses numeric strings for hellwave and inherited id1 stat slots', () => {
     const engineAPI = createClientEngineAPI();
-    const stats = new HellwaveStatsInfo(engineAPI);
+    const stats = new HellwaveStatsInfo(engineAPI.engine);
 
     engineAPI.eventBus.publish(clientEventName(clientEvent.STATS_INIT), 'round_total', '12');
     engineAPI.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'phase_ending_time', ' 30 ');

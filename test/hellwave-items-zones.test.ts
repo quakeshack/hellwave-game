@@ -3,6 +3,12 @@ import { describe, test } from 'node:test';
 
 import Vector from '../../../shared/Vector.ts';
 
+import type { ScheduledThinkCallback } from '../../id1/entity/BaseEntity.ts';
+import type { Sub } from '../../id1/entity/Subs.ts';
+import type { ServerGameAPI as HellwaveGame } from '../GameAPI.ts';
+import { createInertEdict, createInertModGameApi, createMutableEngineApi, createSubStub } from '../../../../test/support/entityMocks.ts';
+import { serializableFieldsOf } from '../../../../test/support/serialization.ts';
+
 await import('../../id1/GameAPI.ts');
 
 const { formatMoney, items, solid } = await import('../Defs.ts');
@@ -16,17 +22,52 @@ const { HellwaveBackpackEntity, HellwaveHealthItemEntity } = hellwaveItemsModule
 const { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } = hellwaveZonesModule;
 const { PlayerEntity } = playerModule;
 
+type Player = InstanceType<typeof PlayerEntity>;
+
+/** The player a buy zone touches, which Hellwave adds the time of the last touch to. */
+type BuyZonePlayer = Player & { buyzone_time: number };
+
+interface SpawnCall {
+  readonly classname: string;
+  readonly initialData: Record<string, unknown>;
+}
+
+/** A backpack that lets a test run what a pickup lists. */
+class TestBackpack extends HellwaveBackpackEntity {
+  collectItems(player: Player, priorItems: number): string[] {
+    return this._collectItems(player, priorItems);
+  }
+}
+
+/** A health item that lets a test run the touch aftermath and replace the movement helper. */
+class TestHealthItem extends HellwaveHealthItemEntity {
+  afterTouch(player: Player): void {
+    this._afterTouch(player);
+  }
+
+  useSub(sub: Sub): void {
+    this._sub = sub;
+  }
+
+  get originalModel(): string | null {
+    return this._model_original;
+  }
+}
+
+interface MockGameOverrides {
+  readonly time?: number;
+  readonly manager?: { phase: HellwaveGame['manager']['phase']; phase_ending_time: number; spawnpoints?: unknown[] };
+  readonly engine?: object;
+}
+
 /**
  * Create the minimal game API surface required by the Hellwave items and zones tests.
- * @param {object} overrides Optional overrides.
- * @returns {object} Mock game API.
+ * @param overrides Optional overrides.
+ * @returns Mock game API.
  */
-function createMockGameAPI(overrides = {}) {
-  const engine = {
+function createMockGameAPI(overrides: MockGameOverrides = {}): HellwaveGame {
+  const engine = createMutableEngineApi({
     ConsoleWarning() {
-    },
-    IsLoading() {
-      return false;
     },
     SpawnEntity() {
       return null;
@@ -36,74 +77,81 @@ function createMockGameAPI(overrides = {}) {
     },
     maxplayers: 0,
     ...overrides.engine,
-  };
+  });
 
-  return {
-    time: 0,
+  return createInertModGameApi<HellwaveGame>({
+    time: overrides.time ?? 0,
     debug_spawnpoints: 0,
-    manager: {
+    manager: overrides.manager ?? {
       phase: phases.waiting,
       phase_ending_time: 0,
       spawnpoints: [],
     },
-    engine,
-    ...overrides,
-  };
+  }, engine);
 }
 
 /**
  * Create a player-shaped runtime stub that satisfies instanceof PlayerEntity checks.
- * @param {number} edictNum Edict slot number.
- * @returns {PlayerEntity} Player-like test entity.
+ * @param edictNum Edict slot number.
+ * @returns Player-like test entity.
  */
-function createPlayerStub(edictNum) {
-  const player = Object.create(PlayerEntity.prototype);
+function createPlayerStub(edictNum: number): BuyZonePlayer {
+  const player = Object.create(PlayerEntity.prototype) as BuyZonePlayer;
 
   Object.defineProperty(player, 'edict', {
-    value: { num: edictNum },
+    value: Object.assign(createInertEdict(), { num: edictNum }),
     writable: true,
     configurable: true,
   });
 
   player.origin = new Vector();
   player.buyzone_time = 0;
-  player.setOrigin = function setOrigin(origin) {
+  player.setOrigin = function setOrigin(this: Player, origin: Vector) {
     this.origin = origin.copy();
   };
 
   return player;
 }
 
+/**
+ * The entities a zone looks up by field, as the lookup hands them out.
+ * @param entities The entities.
+ * @returns A function answering with them.
+ */
+function foundEntities<T>(entities: T[]): () => IterableIterator<T> {
+  return () => entities.values();
+}
+
 void describe('HellwaveBackpackEntity', () => {
   void test('serializes only the added money field and appends formatted money labels', () => {
-    const backpack = new HellwaveBackpackEntity(null, createMockGameAPI()).initializeEntity();
+    const backpack = new TestBackpack(null, createMockGameAPI()).initializeEntity();
 
-    assert.deepEqual(HellwaveBackpackEntity.serializableFields, ['money']);
+    assert.deepEqual(serializableFieldsOf(HellwaveBackpackEntity), ['money']);
 
     backpack.money = 250;
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), [formatMoney(250)]);
+    assert.deepEqual(backpack.collectItems(createPlayerStub(1), 0), [formatMoney(250)]);
 
     backpack.money = 0;
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), []);
+    assert.deepEqual(backpack.collectItems(createPlayerStub(1), 0), []);
   });
 
   void test('forwards the pre-pickup item flags so an already owned weapon is not announced again', () => {
-    const backpack = new HellwaveBackpackEntity(null, createMockGameAPI()).initializeEntity();
+    const backpack = new TestBackpack(null, createMockGameAPI()).initializeEntity();
     backpack.items = items.IT_SHOTGUN;
     backpack.money = 250;
 
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1), 0), ['Shotgun', formatMoney(250)]);
-    assert.deepEqual(backpack._collectItems(createPlayerStub(1), items.IT_SHOTGUN), [formatMoney(250)]);
+    assert.deepEqual(backpack.collectItems(createPlayerStub(1), 0), ['Shotgun', formatMoney(250)]);
+    assert.deepEqual(backpack.collectItems(createPlayerStub(1), items.IT_SHOTGUN), [formatMoney(250)]);
   });
 });
 
 void describe('HellwaveHealthItemEntity', () => {
   void test('delays megahealth decay until the quiet phase ends', () => {
-    const scheduled = [];
-    let usedTargetsWith = null;
+    const scheduled: Array<{ nextThink: number; callback: ScheduledThinkCallback<typeof entity> }> = [];
+    let usedTargetsWith: unknown = null;
     let removed = false;
     const player = createPlayerStub(1);
-    const entity = new HellwaveHealthItemEntity(null, createMockGameAPI({
+    const entity = new TestHealthItem(null, createMockGameAPI({
       time: 10,
       manager: {
         phase: phases.quiet,
@@ -113,11 +161,11 @@ void describe('HellwaveHealthItemEntity', () => {
 
     entity.spawnflags = HellwaveHealthItemEntity.H_MEGA;
     entity.model = 'maps/b_bh100.bsp';
-    entity._sub = {
+    entity.useSub(createSubStub({
       useTargets(activator) {
         usedTargetsWith = activator;
       },
-    };
+    }));
     entity._scheduleThink = function _scheduleThink(nextThink, callback) {
       scheduled.push({ nextThink, callback });
     };
@@ -125,10 +173,10 @@ void describe('HellwaveHealthItemEntity', () => {
       removed = true;
     };
 
-    entity._afterTouch(player);
+    entity.afterTouch(player);
 
     assert.equal(entity.solid, solid.SOLID_NOT);
-    assert.equal(entity._model_original, 'maps/b_bh100.bsp');
+    assert.equal(entity.originalModel, 'maps/b_bh100.bsp');
     assert.equal(entity.model, null);
     assert.equal(entity.owner, player);
     assert.equal(usedTargetsWith, player);
@@ -138,8 +186,8 @@ void describe('HellwaveHealthItemEntity', () => {
   });
 
   void test('uses the current game time for megahealth decay outside quiet phase', () => {
-    const scheduled = [];
-    const entity = new HellwaveHealthItemEntity(null, createMockGameAPI({
+    const scheduled: Array<{ nextThink: number; callback: ScheduledThinkCallback<typeof entity> }> = [];
+    const entity = new TestHealthItem(null, createMockGameAPI({
       time: 10,
       manager: {
         phase: phases.normal,
@@ -148,12 +196,12 @@ void describe('HellwaveHealthItemEntity', () => {
     })).initializeEntity();
 
     entity.spawnflags = HellwaveHealthItemEntity.H_MEGA;
-    entity._sub = { useTargets() {} };
+    entity.useSub(createSubStub());
     entity._scheduleThink = function _scheduleThink(nextThink, callback) {
       scheduled.push({ nextThink, callback });
     };
 
-    entity._afterTouch(createPlayerStub(1));
+    entity.afterTouch(createPlayerStub(1));
 
     assert.equal(scheduled.length, 1);
     assert.equal(scheduled[0].nextThink, 15);
@@ -161,15 +209,15 @@ void describe('HellwaveHealthItemEntity', () => {
 
   void test('removes non-mega health immediately after pickup', () => {
     let removed = false;
-    const entity = new HellwaveHealthItemEntity(null, createMockGameAPI()).initializeEntity();
+    const entity = new TestHealthItem(null, createMockGameAPI()).initializeEntity();
 
     entity.spawnflags = HellwaveHealthItemEntity.H_NORMAL;
-    entity._sub = { useTargets() {} };
+    entity.useSub(createSubStub());
     entity.remove = function remove() {
       removed = true;
     };
 
-    entity._afterTouch(createPlayerStub(1));
+    entity.afterTouch(createPlayerStub(1));
 
     assert.equal(removed, true);
   });
@@ -177,7 +225,7 @@ void describe('HellwaveHealthItemEntity', () => {
 
 void describe('BuyZoneEntity', () => {
   void test('records player presence during quiet phase without teleporting them', () => {
-    const spawnCalls = [];
+    const spawnCalls: SpawnCall[] = [];
     const player = createPlayerStub(2);
     const zone = new BuyZoneEntity(null, createMockGameAPI({
       time: 12,
@@ -186,7 +234,7 @@ void describe('BuyZoneEntity', () => {
         phase_ending_time: 50,
       },
       engine: {
-        SpawnEntity(classname, initialData) {
+        SpawnEntity(classname: string, initialData: Record<string, unknown>) {
           spawnCalls.push({ classname, initialData });
           return null;
         },
@@ -201,7 +249,7 @@ void describe('BuyZoneEntity', () => {
   });
 
   void test('teleports players out immediately when touching outside quiet phase', () => {
-    const spawnCalls = [];
+    const spawnCalls: SpawnCall[] = [];
     const player = createPlayerStub(1);
     const spawnzone = new PlayersSpawnZoneEntity(null, createMockGameAPI()).initializeEntity();
     const targetPoint = new Vector(100, 200, 300);
@@ -212,7 +260,7 @@ void describe('BuyZoneEntity', () => {
         phase_ending_time: 50,
       },
       engine: {
-        SpawnEntity(classname, initialData) {
+        SpawnEntity(classname: string, initialData: Record<string, unknown>) {
           spawnCalls.push({ classname, initialData });
           return null;
         },
@@ -221,20 +269,18 @@ void describe('BuyZoneEntity', () => {
 
     spawnzone.spawnpoints = [targetPoint];
     zone.target = 'buyzone_links';
-    zone.findAllEntitiesByFieldAndValue = function findAllEntitiesByFieldAndValue() {
-      return [spawnzone];
-    };
+    zone.findAllEntitiesByFieldAndValue = foundEntities([spawnzone]);
 
     zone.touch(player);
 
     assert.ok(player.origin.equalsTo(100, 200, 300));
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].classname, TeleportEffectEntity.classname);
-    assert.ok(spawnCalls[0].initialData.origin.equalsTo(100, 200, 300));
+    assert.ok((spawnCalls[0].initialData.origin as Vector).equalsTo(100, 200, 300));
   });
 
   void test('closes the shop by toggling linked entities and teleporting only recent players', () => {
-    const spawnCalls = [];
+    const spawnCalls: SpawnCall[] = [];
     let lightOffCalls = 0;
     let shutterShowCalls = 0;
     const playerOne = createPlayerStub(1);
@@ -246,7 +292,7 @@ void describe('BuyZoneEntity', () => {
       time: 10.05,
       engine: {
         maxplayers: 2,
-        GetEdictById(edictNum) {
+        GetEdictById(edictNum: number) {
           if (edictNum === 1) {
             return { entity: playerOne };
           }
@@ -257,7 +303,7 @@ void describe('BuyZoneEntity', () => {
 
           return { entity: null };
         },
-        SpawnEntity(classname, initialData) {
+        SpawnEntity(classname: string, initialData: Record<string, unknown>) {
           spawnCalls.push({ classname, initialData });
           return null;
         },
@@ -276,9 +322,7 @@ void describe('BuyZoneEntity', () => {
     zone.isOpen = true;
     zone._playerInsideTime[1] = 10.0;
     zone._playerInsideTime[2] = 5.0;
-    zone.findAllEntitiesByFieldAndValue = function findAllEntitiesByFieldAndValue() {
-      return [light, shutter, spawnzone];
-    };
+    zone.findAllEntitiesByFieldAndValue = foundEntities([light, shutter, spawnzone]);
 
     zone.closeShop();
 
@@ -292,7 +336,7 @@ void describe('BuyZoneEntity', () => {
   });
 
   void test('does not teleport players without a recorded buyzone touch when the shop closes', () => {
-    const spawnCalls = [];
+    const spawnCalls: SpawnCall[] = [];
     const playerOne = createPlayerStub(1);
     const playerTwo = createPlayerStub(2);
     const spawnzone = new PlayersSpawnZoneEntity(null, createMockGameAPI()).initializeEntity();
@@ -300,7 +344,7 @@ void describe('BuyZoneEntity', () => {
       time: 10.05,
       engine: {
         maxplayers: 2,
-        GetEdictById(edictNum) {
+        GetEdictById(edictNum: number) {
           if (edictNum === 1) {
             return { entity: playerOne };
           }
@@ -311,7 +355,7 @@ void describe('BuyZoneEntity', () => {
 
           return { entity: null };
         },
-        SpawnEntity(classname, initialData) {
+        SpawnEntity(classname: string, initialData: Record<string, unknown>) {
           spawnCalls.push({ classname, initialData });
           return null;
         },
@@ -322,9 +366,7 @@ void describe('BuyZoneEntity', () => {
 
     zone.target = 'buyzone_links';
     zone._playerInsideTime[1] = 10.0;
-    zone.findAllEntitiesByFieldAndValue = function findAllEntitiesByFieldAndValue() {
-      return [spawnzone];
-    };
+    zone.findAllEntitiesByFieldAndValue = foundEntities([spawnzone]);
 
     zone.closeShop();
 
@@ -381,7 +423,7 @@ void describe('Spawnzone sampling', () => {
       unsetModelCalls += 1;
     };
 
-    assert.deepEqual(PlayersSpawnZoneEntity.serializableFields, ['spawnpoints']);
+    assert.deepEqual(serializableFieldsOf(PlayersSpawnZoneEntity), ['spawnpoints']);
 
     zone.spawn();
 

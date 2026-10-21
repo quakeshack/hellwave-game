@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import type Cvar from '../../../engine/common/Cvar.ts';
+import { createMutableCvarStub } from '../../../../test/support/cvarStub.ts';
+import { createInertEdict, createInertEngineApi } from '../../../../test/support/entityMocks.ts';
+import { serializableFieldsOf } from '../../../../test/support/serialization.ts';
+
 await import('../../id1/GameAPI.ts');
 
 const { ServerGameAPI: Id1ServerGameAPI } = await import('../../id1/GameAPI.ts');
@@ -13,66 +18,47 @@ const GameManager = hellwaveManagerModule.default;
 const HellwavePlayer = hellwavePlayerModule.default;
 const HellwaveStats = hellwaveStatsModule.default;
 
-/**
- * Create a mutable mock cvar.
- * @param {number|string} initialValue Initial cvar value.
- * @returns {object} Mock cvar.
- */
-function createMockCvar(initialValue) {
-  const normalizedValue = Number(initialValue);
-
-  return {
-    value: normalizedValue,
-    string: String(normalizedValue),
-    set(nextValue) {
-      this.value = Number(nextValue);
-      this.string = String(this.value);
-    },
-    free() {
-    },
-  };
-}
+type StaticCvars = typeof ServerGameAPI._cvars;
 
 /**
  * Create the static cvar table used by Hellwave ServerGameAPI tests.
- * @param {object} overrides Override values for selected cvars.
- * @returns {object} Mock static cvar registry.
+ * @param overrides Override values for selected cvars.
+ * @returns Mock static cvar registry.
  */
-function createStaticCvars(overrides = {}) {
+function createStaticCvars(overrides: Partial<Record<keyof StaticCvars, Cvar>> = {}): Record<keyof StaticCvars, Cvar> {
   return {
-    nomonster: createMockCvar(0),
-    fraglimit: createMockCvar(20),
-    timelimit: createMockCvar(15),
-    samelevel: createMockCvar(0),
-    noexit: createMockCvar(0),
-    skill: createMockCvar(1),
-    deathmatch: createMockCvar(0),
-    coop: createMockCvar(0),
-    rounds: createMockCvar(12),
-    roundCurrent: createMockCvar(0),
-    quiettime: createMockCvar(15),
-    normaltime: createMockCvar(90),
-    maxmonstersalive: createMockCvar(20),
-    debug_spawnpoints: createMockCvar(0),
+    nomonster: createMutableCvarStub(0),
+    fraglimit: createMutableCvarStub(20),
+    timelimit: createMutableCvarStub(15),
+    samelevel: createMutableCvarStub(0),
+    noexit: createMutableCvarStub(0),
+    skill: createMutableCvarStub(1),
+    deathmatch: createMutableCvarStub(0),
+    coop: createMutableCvarStub(0),
+    rounds: createMutableCvarStub(12),
+    roundCurrent: createMutableCvarStub(0),
+    quiettime: createMutableCvarStub(15),
+    normaltime: createMutableCvarStub(90),
+    maxmonstersalive: createMutableCvarStub(20),
+    debug_spawnpoints: createMutableCvarStub(0),
     ...overrides,
-  };
+  } as Record<keyof StaticCvars, Cvar>;
 }
 
 /**
  * Create the minimal server engine surface required by Hellwave ServerGameAPI tests.
- * @param {object} overrides Optional engine overrides.
- * @returns {object} Mock server engine.
+ * @returns Mock server engine.
  */
-function createMockServerEngine(overrides = {}) {
-  const cvars = {
-    teamplay: createMockCvar(0),
-    sv_gravity: createMockCvar(800),
-    sv_nextmap: createMockCvar(0),
+function createMockServerEngine(): ReturnType<typeof createInertEngineApi> {
+  const cvars: Record<string, Cvar> = {
+    teamplay: createMutableCvarStub(0),
+    sv_gravity: createMutableCvarStub(800),
+    sv_nextmap: createMutableCvarStub(0),
   };
 
-  return {
-    GetCvar(name) {
-      return cvars[name] ?? createMockCvar(0);
+  return createInertEngineApi({
+    GetCvar(name: string): Cvar {
+      return cvars[name] ?? createMutableCvarStub(0);
     },
     eventBus: {
       subscribe() {
@@ -80,17 +66,16 @@ function createMockServerEngine(overrides = {}) {
       },
     },
     maxplayers: 1,
-    ...overrides,
-  };
+  });
 }
 
 /**
  * Create a player-shaped Hellwave runtime stub.
- * @param {object} overrides Optional overrides.
- * @returns {object} Player-like stub.
+ * @param overrides Optional overrides.
+ * @returns Player-like stub.
  */
-function createPlayerStub(overrides = {}) {
-  return Object.assign(Object.create(HellwavePlayer.prototype), {
+function createPlayerStub(overrides: object = {}): InstanceType<typeof HellwavePlayer> {
+  return Object.assign(Object.create(HellwavePlayer.prototype) as InstanceType<typeof HellwavePlayer>, {
     connected() {
     },
     disconnected() {
@@ -104,12 +89,12 @@ void describe('Hellwave ServerGameAPI serialization', () => {
 
     assert.equal(gameAPI.stats instanceof HellwaveStats, true);
     assert.equal(gameAPI.manager instanceof GameManager, true);
-    assert.deepEqual(ServerGameAPI.serializableFields, ['manager']);
+    assert.deepEqual(serializableFieldsOf(ServerGameAPI), ['manager']);
 
     const serialized = gameAPI.serialize();
 
     assert.deepEqual(Object.keys(serialized), [
-      ...Id1ServerGameAPI.serializableFields,
+      ...(serializableFieldsOf(Id1ServerGameAPI) ?? []),
       'manager',
     ]);
     assert.deepEqual(serialized.stats, ['S', {
@@ -126,7 +111,7 @@ void describe('Hellwave ServerGameAPI serialization', () => {
       phase_ending_time: ['P', 0],
     }]);
     assert.equal(serialized.manager[0], 'S');
-    assert.deepEqual(Object.keys(serialized.manager[1]), GameManager.serializableFields);
+    assert.deepEqual(Object.keys(serialized.manager[1]), serializableFieldsOf(GameManager));
   });
 });
 
@@ -139,10 +124,10 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
 
     try {
       ServerGameAPI._cvars = createStaticCvars({
-        rounds: createMockCvar(20),
-        coop: createMockCvar(1),
-        deathmatch: createMockCvar(1),
-        skill: createMockCvar(9),
+        rounds: createMutableCvarStub(20),
+        coop: createMutableCvarStub(1),
+        deathmatch: createMutableCvarStub(1),
+        skill: createMutableCvarStub(9),
       });
 
       const gameAPI = new ServerGameAPI(createMockServerEngine());
@@ -162,9 +147,9 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
       assert.equal(gameAPI.serverflags, 7);
       assert.equal(subscribed, 1);
       assert.equal(gameAPI.manager.round_number_limit, 12);
-      assert.equal(ServerGameAPI._cvars.coop.value, 1);
-      assert.equal(ServerGameAPI._cvars.deathmatch.value, 0);
-      assert.equal(ServerGameAPI._cvars.skill.value, 3);
+      assert.equal(ServerGameAPI._cvars.coop?.value, 1);
+      assert.equal(ServerGameAPI._cvars.deathmatch?.value, 0);
+      assert.equal(ServerGameAPI._cvars.skill?.value, 3);
       assert.equal(precachedResources, true);
       assert.equal(initializedNextMap, true);
     } finally {
@@ -174,7 +159,7 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
 
   void test('forwards player lifecycle hooks to the Hellwave player and manager', () => {
     const gameAPI = new ServerGameAPI(createMockServerEngine());
-    const calls = [];
+    const calls: unknown[] = [];
     const playerEntity = createPlayerStub({
       connected() {
         calls.push('player.connected');
@@ -183,15 +168,15 @@ void describe('Hellwave ServerGameAPI lifecycle', () => {
         calls.push('player.disconnected');
       },
     });
-    const clientEdict = { entity: playerEntity };
+    const clientEdict = Object.assign(createInertEdict(), { entity: playerEntity });
 
-    gameAPI.manager.clientConnected = (player) => {
+    gameAPI.manager.clientConnected = (player: unknown) => {
       calls.push(['manager.connected', player]);
     };
-    gameAPI.manager.clientDisconnected = (player) => {
+    gameAPI.manager.clientDisconnected = (player: unknown) => {
       calls.push(['manager.disconnected', player]);
     };
-    gameAPI.manager.clientBeing = (player) => {
+    gameAPI.manager.clientBeing = (player: unknown) => {
       calls.push(['manager.begin', player]);
     };
 

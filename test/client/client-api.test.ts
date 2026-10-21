@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import Vector from '../../../../shared/Vector.ts';
-import { captureRegisteredPages, createMockClientEngine } from '../../../id1/test/client/fixtures.ts';
-import { createClientdata } from './fixtures.mjs';
+import type { ViewInput, ViewResult } from '../../../../shared/GameInterfaces.ts';
+import { asClientEngineAPI, captureRegisteredPages, createMockClientEngine, type MockTexture } from '../../../id1/test/client/fixtures.ts';
+import { createClientdata } from './fixtures.ts';
 
 await import('../../../id1/GameAPI.ts');
 
@@ -12,10 +13,19 @@ const clientApiModule = await import('../../client/ClientAPI.ts');
 
 const { ClientGameAPI } = clientApiModule;
 
+/**
+ * The loading screen the game loaded, which the mock engine makes as a {@link MockTexture}.
+ * @returns The texture, or null when there is none.
+ */
+function loadingScreen(): MockTexture | null {
+  // The mock engine's LoadPic* makes MockTextures where the real one makes GLTextures.
+  return ClientGameAPI.loadingScreen as unknown as MockTexture | null;
+}
+
 void describe('Hellwave client API', () => {
   void test('suppresses the viewmodel while spectating and renders navigation hints as rocket trails', () => {
     const engine = createMockClientEngine();
-    const clientGame = new ClientGameAPI(engine);
+    const clientGame = new ClientGameAPI(asClientEngineAPI(engine));
 
     clientGame.init();
     clientGame.clientdata = createClientdata({
@@ -47,11 +57,11 @@ void describe('Hellwave client API', () => {
   void test('loads and frees the loading screen while applying bloom defaults', async () => {
     const engine = createMockClientEngine();
 
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
     await Promise.resolve();
 
-    assert.equal(ClientGameAPI.loadingScreen?.name, 'gfx/loadingscreen.png');
-    assert.equal(ClientGameAPI.loadingScreen?.lockedTextureMode, 'GL_LINEAR');
+    assert.equal(loadingScreen()?.name, 'gfx/loadingscreen.png');
+    assert.equal(loadingScreen()?.lockedTextureMode, 'GL_LINEAR');
     assert.deepEqual(engine.cvarSets, [
       ['r_bloom', true],
       ['r_bloom_downsample', 8],
@@ -61,10 +71,10 @@ void describe('Hellwave client API', () => {
       ['r_bloom_strength', 1],
     ]);
 
-    const loadingScreen = ClientGameAPI.loadingScreen;
-    ClientGameAPI.Shutdown(engine);
+    const loaded = loadingScreen();
+    ClientGameAPI.Shutdown(asClientEngineAPI(engine));
 
-    assert.equal(loadingScreen?.freed, true);
+    assert.equal(loaded?.freed, true);
     assert.equal(ClientGameAPI.loadingScreen, null);
   });
 
@@ -74,7 +84,7 @@ void describe('Hellwave client API', () => {
     Math.random = () => 0;
 
     try {
-      ClientGameAPI.Init(engine);
+      ClientGameAPI.Init(asClientEngineAPI(engine));
     } finally {
       Math.random = originalRandom;
     }
@@ -86,7 +96,7 @@ void describe('Hellwave client API', () => {
   void test('leaves an existing custom name untouched', () => {
     const engine = createMockClientEngine({}, { cvars: { _cl_name: 'ReturningPlayer' } });
 
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
 
     assert.equal(engine.GetCvar('_cl_name').string, 'ReturningPlayer');
   });
@@ -95,7 +105,7 @@ void describe('Hellwave client API', () => {
     const engine = createMockClientEngine();
     const pages = captureRegisteredPages(engine);
 
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
 
     // Regression test: Id1ClientGameAPI.Init used to unconditionally build id1's whole classic
     // single-player front end (main/singleplayer/load/save/multiplayer/launch_server/help) and
@@ -116,15 +126,15 @@ void describe('Hellwave client API', () => {
 
   void test('sets \'main\' as the root page itself, since Id1Menu no longer does it for classicFrontend: false', () => {
     const engine = createMockClientEngine();
-    let rootPageName = null;
-    engine.Menu.SetRootPage = (name) => { rootPageName = name; };
+    let rootPageName: string | null = null;
+    engine.Menu.SetRootPage = (name: string) => { rootPageName = name; };
 
     // Regression test: HellwaveMenu relied on Id1Menu.Init's unconditional Menu.SetRootPage('main')
     // call as a side effect (root resolves lazily by name, so re-registering 'main' afterwards
     // still worked). Once Id1Menu.Init started skipping that call for classicFrontend: false,
     // nothing set the root page at all, and the real engine's MenuStack.pushRoot() asserted on
     // startup. See plans/hellwave-menu-asset-cleanup.md.
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
 
     assert.equal(rootPageName, 'main');
   });
@@ -135,22 +145,28 @@ void describe('Hellwave client API', () => {
     // Regression test: `ClientGameAPI.Init` (id1) used to call `Q1HUD.Init` directly, so a
     // subclass's own static Init (registering `hw_buymenu`) never ran in production even though
     // it worked fine when tests invoked `HellwaveHUD.Init` directly.
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
     await Promise.resolve(); // flush the loading-screen load Init kicks off
 
     assert.equal(engine.commands.has('hw_buymenu'), true);
 
-    ClientGameAPI.Shutdown(engine);
+    ClientGameAPI.Shutdown(asClientEngineAPI(engine));
     assert.equal(engine.commands.has('hw_buymenu'), false);
   });
 });
 
+/** The result of a view calculation, which the mock engine marks when the engine's own calculation ran. */
+type DefaultableViewResult = ViewResult & { defaulted?: boolean };
+
+/** The view input with writable members, so that a test can change the frame time. */
+type MutableViewInput = { -readonly [Name in keyof ViewInput]: ViewInput[Name] };
+
 void describe('Hellwave first-person view (prototype of calcView)', () => {
   /**
    * What the engine gives a game to calculate the view from, and where it puts the result.
-   * @returns {{ input: object, result: object }} Both, with the vectors filled in.
+   * @returns Both, with the vectors filled in.
    */
-  function createViewFrame() {
+  function createViewFrame(): { input: MutableViewInput; result: DefaultableViewResult } {
     return {
       input: {
         origin: new Vector(100, 200, 300),
@@ -175,16 +191,16 @@ void describe('Hellwave first-person view (prototype of calcView)', () => {
 
   /**
    * Builds the game with `hw_view` set.
-   * @param {string} variant The value of `hw_view`.
-   * @returns {{ engine: ReturnType<typeof createMockClientEngine>, clientGame: InstanceType<typeof ClientGameAPI> }} Both.
+   * @param variant The value of `hw_view`.
+   * @returns Both.
    */
-  function create(variant) {
+  function create(variant: string) {
     const engine = createMockClientEngine();
 
-    ClientGameAPI.Init(engine);
+    ClientGameAPI.Init(asClientEngineAPI(engine));
     engine.SetCvar('hw_view', variant);
 
-    const clientGame = new ClientGameAPI(engine);
+    const clientGame = new ClientGameAPI(asClientEngineAPI(engine));
     clientGame.init();
 
     return { engine, clientGame };

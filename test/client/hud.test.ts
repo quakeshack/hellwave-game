@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
-import { createMockClientEngine } from '../../../id1/test/client/fixtures.ts';
-import { createClientdata, createHellwaveGame } from './fixtures.mjs';
+import { asClientEngineAPI, createMockClientEngine } from '../../../id1/test/client/fixtures.ts';
+import { createClientdata, createHellwaveGame } from './fixtures.ts';
 
 await import('../../../id1/GameAPI.ts');
 
@@ -12,19 +12,26 @@ const hudModule = await import('../../client/HUD.ts');
 
 const HellwaveHUD = hudModule.default;
 
+/** The Hellwave HUD with its stats opened for a test to read. */
+class TestHud extends HellwaveHUD {
+  get statsState() {
+    return this.stats;
+  }
+}
+
 void describe('Hellwave HUD', () => {
   void test('reuses the inherited stats getter for Hellwave-specific stats', () => {
     const engine = createMockClientEngine();
     const game = createHellwaveGame(engine);
-    const hud = new HellwaveHUD(game, engine);
+    const hud = new TestHud(game, asClientEngineAPI(engine));
 
     hud.init();
 
     engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'round_total', 6);
     engine.eventBus.publish(clientEventName(clientEvent.STATS_UPDATED), 'phase', phases.quiet);
 
-    assert.equal(hud.stats.round_total, 6);
-    assert.equal(hud.stats.phase, phases.quiet);
+    assert.equal(hud.statsState?.round_total, 6);
+    assert.equal(hud.statsState?.phase, phases.quiet);
   });
 
   void test('plays phase sounds, updates money, and shows the spectator status message', () => {
@@ -33,11 +40,11 @@ void describe('Hellwave HUD', () => {
     Math.random = () => 0.0;
 
     try {
-      HellwaveHUD.Init(engine);
+      HellwaveHUD.Init(asClientEngineAPI(engine));
       const game = createHellwaveGame(engine, {
         clientdata: createClientdata({ spectating: true }),
       });
-      const hud = new HellwaveHUD(game, engine);
+      const hud = new TestHud(game, asClientEngineAPI(engine));
 
       hud.init();
 
@@ -51,7 +58,7 @@ void describe('Hellwave HUD', () => {
       assert.deepEqual(engine.postProcessPulses.map(({ descriptor }) => descriptor.key), ['info']);
       assert.ok(engine.drawStrings.some(({ text }) => text === 'Spectating... Waiting for next round'));
     } finally {
-      HellwaveHUD.Shutdown(engine);
+      HellwaveHUD.Shutdown(asClientEngineAPI(engine));
       Math.random = originalRandom;
     }
   });
@@ -61,7 +68,7 @@ void describe('Hellwave HUD', () => {
     const game = createHellwaveGame(engine, {
       clientdata: createClientdata({ buyzone: 0, money: 0 }),
     });
-    const hud = new HellwaveHUD(game, engine);
+    const hud = new TestHud(game, asClientEngineAPI(engine));
 
     hud.init();
 
@@ -77,11 +84,11 @@ void describe('Hellwave HUD', () => {
     // publish a `hud.showscores` event on the shared event bus rather than writing to a static
     // class field, so any live HUD instance -- including a `HellwaveHUD` -- picks up the toggle
     // through its own `hud.showscores` subscription.
-    HellwaveHUD.Init(engine);
+    HellwaveHUD.Init(asClientEngineAPI(engine));
 
     try {
       const game = createHellwaveGame(engine);
-      const hud = new HellwaveHUD(game, engine);
+      const hud = new TestHud(game, asClientEngineAPI(engine));
 
       hud.init();
 
@@ -89,17 +96,17 @@ void describe('Hellwave HUD', () => {
       hud.draw();
       assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), false);
 
-      void engine.commands.get('+showscores')();
+      void engine.commands.get('+showscores')?.();
       engine.drawPics.length = 0;
       hud.draw();
       assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), true);
 
-      void engine.commands.get('-showscores')();
+      void engine.commands.get('-showscores')?.();
       engine.drawPics.length = 0;
       hud.draw();
       assert.equal(engine.drawPics.some(({ pic }) => pic.name === 'SCOREBAR'), false);
     } finally {
-      HellwaveHUD.Shutdown(engine);
+      HellwaveHUD.Shutdown(asClientEngineAPI(engine));
     }
   });
 });

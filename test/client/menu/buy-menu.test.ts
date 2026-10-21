@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { K } from '../../../../../shared/Keys.ts';
-import { createMockClientEngine, createMockMenuAPI } from '../../../../id1/test/client/fixtures.ts';
-import { createClientdata, createHellwaveGame } from '../fixtures.mjs';
+import type { PostProcessStack, PostProcessStackOptions } from '../../../../../shared/GameInterfaces.ts';
+import { MenuItem } from '../../../../../engine/client/menu/MenuItem.ts';
+import { VerticalLayout, type MenuPage } from '../../../../../engine/client/menu/MenuPage.ts';
+import { asClientEngineAPI, createMockClientEngine, createMockMenuAPI, type MockClientEngine } from '../../../../id1/test/client/fixtures.ts';
+import { createClientdata, createHellwaveGame, type HellwaveClientdata, type HellwaveGameStub } from '../fixtures.ts';
+import { itemAt, layoutOf, pressItem } from './fixtures.ts';
 
 await import('../../../../id1/GameAPI.ts');
 
@@ -15,10 +19,10 @@ const HellwaveHUD = hudModule.default;
 
 /**
  * Build the expected buy-menu row label for a catalog entry, matching `HellwaveBuyMenu`'s format.
- * @param {number} impulse Catalog key (1-9).
- * @returns {string} Expected row label.
+ * @param impulse Catalog key (1-9).
+ * @returns Expected row label.
  */
-function expectedBuyRowLabel(impulse) {
+function expectedBuyRowLabel(impulse: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): string {
   const item = buyMenuItems[impulse];
 
   return `[${impulse}] ${formatMoney(item.cost).padStart(5)} - ${item.label}`;
@@ -28,16 +32,16 @@ function expectedBuyRowLabel(impulse) {
  * Create a HUD wired to a real (mock) menu stack, capturing the buy-menu page it registers
  * so tests can drive its rows/customHandleInput/onEscape directly instead of only observing
  * through `engine.Menu.IsOpen()`.
- * @param {object} clientdataOverrides Overrides merged into the initial clientdata.
- * @param {object} engineOverrides Additional overrides merged into the mock engine (besides `Menu`, which this rig owns).
- * @returns {{ engine: object, hud: object, getBuyMenuPage: () => object }} Test rig.
+ * @param clientdataOverrides Overrides merged into the initial clientdata.
+ * @param engineOverrides Additional overrides merged into the mock engine (besides `Menu`, which this rig owns).
+ * @returns Test rig.
  */
-function createBuyMenuHud(clientdataOverrides = {}, engineOverrides = {}) {
+function createBuyMenuHud(clientdataOverrides: Partial<HellwaveClientdata> = {}, engineOverrides: Parameters<typeof createMockClientEngine>[0] = {}) {
   const realMenuAPI = createMockMenuAPI();
-  let buyMenuPage = null;
+  let buyMenuPage: MenuPage | null = null;
   const menuAPI = {
     ...realMenuAPI,
-    RegisterPage(name, page) {
+    RegisterPage(name: string, page: MenuPage): void {
       if (name === 'hellwave_buy') {
         buyMenuPage = page;
       }
@@ -49,17 +53,21 @@ function createBuyMenuHud(clientdataOverrides = {}, engineOverrides = {}) {
   const game = createHellwaveGame(engine, {
     clientdata: createClientdata(clientdataOverrides),
   });
-  const hud = new HellwaveHUD(game, engine);
+  const hud = new HellwaveHUD(game, asClientEngineAPI(engine));
 
   // `hw_buymenu` is registered once by the static lifecycle hook (see HUD.ts `Init`), not by
   // instance init -- needed here since the command handler reads the currently-active instance.
-  HellwaveHUD.Init(engine);
+  HellwaveHUD.Init(asClientEngineAPI(engine));
   hud.init();
 
   return {
     engine,
+    game,
     hud,
-    getBuyMenuPage: () => buyMenuPage,
+    getBuyMenuPage: (): MenuPage => {
+      assert.ok(buyMenuPage, 'the buy menu page is registered');
+      return buyMenuPage;
+    },
   };
 }
 
@@ -72,8 +80,8 @@ void describe('hw_buymenu command registration', () => {
     // constructed on every map load (see `ClientGameAPI`). Before this fix, `hw_buymenu` was
     // registered from instance init, so the second `hud.init()` here would hit
     // `Cmd.AddCommand`'s "already exists" assert.
-    new HellwaveHUD(game, engine).init();
-    new HellwaveHUD(game, engine).init();
+    new HellwaveHUD(game, asClientEngineAPI(engine)).init();
+    new HellwaveHUD(game, asClientEngineAPI(engine)).init();
 
     assert.equal(engine.commands.has('hw_buymenu'), false);
   });
@@ -81,10 +89,10 @@ void describe('hw_buymenu command registration', () => {
   void test('static Init registers it once; Shutdown unregisters it', () => {
     const engine = createMockClientEngine();
 
-    HellwaveHUD.Init(engine);
+    HellwaveHUD.Init(asClientEngineAPI(engine));
     assert.equal(engine.commands.has('hw_buymenu'), true);
 
-    HellwaveHUD.Shutdown(engine);
+    HellwaveHUD.Shutdown(asClientEngineAPI(engine));
     assert.equal(engine.commands.has('hw_buymenu'), false);
   });
 
@@ -94,16 +102,16 @@ void describe('hw_buymenu command registration', () => {
       clientdata: createClientdata({ buyzone: 1 }),
     });
 
-    HellwaveHUD.Init(engine);
-    const hud = new HellwaveHUD(game, engine);
+    HellwaveHUD.Init(asClientEngineAPI(engine));
+    const hud = new HellwaveHUD(game, asClientEngineAPI(engine));
     hud.init();
     hud.shutdown();
 
-    void engine.commands.get('hw_buymenu')();
+    void engine.commands.get('hw_buymenu')?.();
 
     assert.equal(engine.Menu.IsOpen('hellwave_buy'), false);
 
-    HellwaveHUD.Shutdown(engine);
+    HellwaveHUD.Shutdown(asClientEngineAPI(engine));
   });
 });
 
@@ -111,10 +119,10 @@ void describe('buy menu as a real menu page', () => {
   /**
    * Simulate pressing `b` -- triggers the `hw_buymenu` client command the HUD registers,
    * exactly like the real keybind does, with no server round-trip involved.
-   * @param {object} engine Mock client engine returned by `createBuyMenuHud`.
+   * @param engine Mock client engine returned by `createBuyMenuHud`.
    */
-  function pressBuyMenuKey(engine) {
-    engine.commands.get('hw_buymenu')();
+  function pressBuyMenuKey(engine: MockClientEngine): void {
+    void engine.commands.get('hw_buymenu')?.();
   }
 
   /**
@@ -122,24 +130,26 @@ void describe('buy menu as a real menu page', () => {
    * publishing the change event, matching what `ClientMessages.parseClientData` actually does
    * in production (update-then-publish) -- code reading `game.clientdata` directly, like the
    * `hw_buymenu` command, depends on the field already being current by the time it runs.
-   * @param {object} hud HUD instance returned by `createBuyMenuHud`.
-   * @param {object} engine Mock client engine returned by `createBuyMenuHud`.
-   * @param {string} field Clientdata field name.
-   * @param {number} value New value.
+   * @param game Game returned by `createBuyMenuHud`.
+   * @param engine Mock client engine returned by `createBuyMenuHud`.
+   * @param field Clientdata field name.
+   * @param value New value.
    */
-  function publishClientdataChange(hud, engine, field, value) {
-    const previousValue = hud.game.clientdata[field];
-    hud.game.clientdata[field] = value;
+  function publishClientdataChange(game: HellwaveGameStub, engine: MockClientEngine, field: 'buyzone' | 'money', value: number): void {
+    // The two fields have different literal types (buyzone is -1, 0 or 1); the event carries plain numbers.
+    const clientdata = game.clientdata as unknown as Record<string, number>;
+    const previousValue = clientdata[field];
+    clientdata[field] = value;
     engine.eventBus.publish('client.clientdata.field-changed', field, value, previousValue);
   }
 
   void test('opens instantly (no server round-trip) once the server confirms the player is in a buyzone', () => {
-    const { engine, hud } = createBuyMenuHud({ buyzone: 0, money: 0 });
+    const { engine, game } = createBuyMenuHud({ buyzone: 0, money: 0 });
 
     pressBuyMenuKey(engine);
     assert.equal(engine.Menu.IsOpen('hellwave_buy'), false); // buyzone still 0, refused
 
-    publishClientdataChange(hud, engine, 'buyzone', 1);
+    publishClientdataChange(game, engine, 'buyzone', 1);
     assert.equal(engine.Menu.IsOpen('hellwave_buy'), false); // in the zone, but menu not requested yet
 
     pressBuyMenuKey(engine);
@@ -148,11 +158,11 @@ void describe('buy menu as a real menu page', () => {
   });
 
   void test('applies the buy-menu blur/desaturate post-process while open, clears it on close', () => {
-    const postProcessSetStacks = [];
+    const postProcessSetStacks: Array<PostProcessStack | null> = [];
     const { engine } = createBuyMenuHud({ buyzone: 1, money: 0 }, {
       PostProcess: {
         // the tints of the HUD have channels of their own, this is about the buy menu's
-        setStack(stack, options) {
+        setStack(stack: PostProcessStack, options?: PostProcessStackOptions): void {
           if (options?.channel === undefined) {
             postProcessSetStacks.push(stack);
           }
@@ -189,7 +199,9 @@ void describe('buy menu as a real menu page', () => {
     pressBuyMenuKey(engine);
 
     const page = getBuyMenuPage();
-    const [, moneyLabel, heavyArmorRow, shotgunRow] = page.items;
+    const moneyLabel = itemAt(page, 1, MenuItem);
+    const heavyArmorRow = itemAt(page, 2, MenuItem);
+    const shotgunRow = itemAt(page, 3, MenuItem);
 
     assert.equal(moneyLabel.label, `Balance: ${formatMoney(150)}`);
     assert.equal(heavyArmorRow.visible, true); // costs 100
@@ -211,7 +223,7 @@ void describe('buy menu as a real menu page', () => {
     engine.eventBus.publish('client.clientdata.field-changed', 'money', 1000, 0);
     pressBuyMenuKey(engine);
 
-    const heavyArmorRow = getBuyMenuPage().items[2];
+    const heavyArmorRow = itemAt(getBuyMenuPage(), 2, MenuItem);
 
     assert.equal(heavyArmorRow.visible, true);
     assert.equal(heavyArmorRow.enabled, false); // affordable, but armor is already at the 200 cap
@@ -223,8 +235,7 @@ void describe('buy menu as a real menu page', () => {
     engine.eventBus.publish('client.clientdata.field-changed', 'money', 1000, 0);
     pressBuyMenuKey(engine);
 
-    const heavyArmorRow = getBuyMenuPage().items[2];
-    heavyArmorRow.action();
+    pressItem(getBuyMenuPage(), 2);
 
     assert.deepEqual(engine.appendedConsoleText, [`impulse ${toBuyImpulse(1)}\n`]);
   });
@@ -240,7 +251,9 @@ void describe('buy menu as a real menu page', () => {
     // The built-in blinking cursor is disabled here on purpose (see the next test) -- hover
     // still tracks `page.cursor` the normal way regardless, since that's `VerticalLayout.hitTest`,
     // unrelated to whether it also draws its own cursor glyph.
-    assert.equal(page.layout.showCursor, false);
+    const layout = layoutOf(page);
+    assert.ok(layout instanceof VerticalLayout);
+    assert.equal(layout.showCursor, false);
 
     // Row y-positions: header (y=70) + money label (y=86) -- then item 1 (y=102) and item 2
     // (y=118), each 8 tall plus 8 spacing. The feedback label now sits below the whole list, so
@@ -258,7 +271,7 @@ void describe('buy menu as a real menu page', () => {
     pressBuyMenuKey(engine);
 
     const page = getBuyMenuPage();
-    const feedbackLabel = page.items.at(-1);
+    const feedbackLabel = itemAt(page, -1, MenuItem);
 
     assert.equal(feedbackLabel.visible, false);
 
@@ -283,7 +296,7 @@ void describe('buy menu as a real menu page', () => {
 
     const page = getBuyMenuPage();
 
-    assert.equal(page.handleInput('9'.charCodeAt(0)), true);
+    assert.equal(page.handleInput('9'.charCodeAt(0) as K), true);
     assert.deepEqual(engine.appendedConsoleText, [`impulse ${toBuyImpulse(9)}\n`]);
 
     // Not a digit -- falls through to the default MenuPage handling instead of being
@@ -300,7 +313,7 @@ void describe('buy menu as a real menu page', () => {
     const page = getBuyMenuPage();
 
     // Item 9 (Megahealth) costs 1000 -- not affordable with a 0 balance, so its row is disabled.
-    assert.equal(page.handleInput('9'.charCodeAt(0)), true);
+    assert.equal(page.handleInput('9'.charCodeAt(0) as K), true);
     assert.deepEqual(engine.appendedConsoleText, []);
   });
 

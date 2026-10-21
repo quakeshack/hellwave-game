@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { K } from '../../../../../shared/Keys.ts';
-import { createMainMenuRig, createMockSessionsChannel } from './fixtures.mjs';
+import { createMockSession } from '../../../../id1/test/client/fixtures.ts';
+import { Action } from '../../../../../engine/client/menu/MenuItem.ts';
+import { createMainMenuRig, createMockSessionsChannel, itemAt, layoutOf, pressItem } from './fixtures.ts';
 
 await import('../../../../id1/GameAPI.ts');
 
@@ -28,30 +30,30 @@ void describe('Hellwave main menu', () => {
     const { getMainPage } = createMainMenuRig(HellwaveMenu);
     const page = getMainPage();
 
-    assert.deepEqual(page.items.map((item) => item.font), [null, null, null, null]);
+    assert.deepEqual(page.items.map((_item, index) => itemAt(page, index, Action).font), [null, null, null, null]);
 
     await Promise.resolve(); // flush LoadBitmapFont's promise
 
-    for (const item of page.items) {
-      assert.equal(item.font.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+    for (const index of page.items.keys()) {
+      assert.equal(itemAt(page, index, Action).font?.charset, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
     }
   });
 
   void test('New Game opens the profile gate first when no profile has been confirmed yet', () => {
     const { calls, getMainPage, getProfilePage } = createMainMenuRig(HellwaveMenu);
 
-    getMainPage().items[0].action();
+    pressItem(getMainPage(), 0);
 
     assert.deepEqual(calls.push, ['hellwave_profile']);
     assert.equal(calls.forceClose, 0);
-    assert.equal(getProfilePage().items.at(-1).label, 'Continue'); // gate-specific CTA label
+    assert.equal(getProfilePage().items.at(-1)?.label, 'Continue'); // gate-specific CTA label
   });
 
   void test('New Game opens the map picker immediately once a profile has already been confirmed', () => {
     const { engine, calls, getMainPage } = createMainMenuRig(HellwaveMenu);
     engine.SetCvar('hw_profile_confirmed', '1');
 
-    getMainPage().items[0].action();
+    pressItem(getMainPage(), 0);
 
     assert.deepEqual(calls.push, ['hellwave_newgame']);
     assert.deepEqual(engine.appendedConsoleText, []);
@@ -61,8 +63,8 @@ void describe('Hellwave main menu', () => {
   void test('accepting the profile gate confirms the profile and then opens the map picker', () => {
     const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig(HellwaveMenu);
 
-    getMainPage().items[0].action(); // opens the gate, Continue label
-    getProfilePage().items.at(-1).action(); // accept
+    pressItem(getMainPage(), 0); // opens the gate, Continue label
+    pressItem(getProfilePage(), -1); // accept
 
     assert.equal(engine.GetCvar('hw_profile_confirmed').string, '1');
     assert.deepEqual(calls.push, ['hellwave_profile', 'hellwave_newgame']);
@@ -72,8 +74,8 @@ void describe('Hellwave main menu', () => {
     const { calls, getMainPage } = createMainMenuRig(HellwaveMenu);
     const page = getMainPage();
 
-    page.items[2].action();
-    page.items[3].action();
+    pressItem(page, 2);
+    pressItem(page, 3);
 
     assert.deepEqual(calls.push, ['options', 'quit']);
   });
@@ -99,10 +101,10 @@ void describe('Hellwave main menu', () => {
     const { getMainPage } = createMainMenuRig(HellwaveMenu);
     const page = getMainPage();
 
-    assert.equal(page.layout.hitTest(page.items, 60, 100), 0); // New Game
-    assert.equal(page.layout.hitTest(page.items, 60, 190), 3); // Quit
-    assert.equal(page.layout.hitTest(page.items, 250, 100), null); // session column, nothing there yet
-    assert.equal(page.layout.hitTest(page.items, 60, 900), null); // below every row
+    assert.equal(layoutOf(page).hitTest(page.items, 60, 100), 0); // New Game
+    assert.equal(layoutOf(page).hitTest(page.items, 60, 190), 3); // Quit
+    assert.equal(layoutOf(page).hitTest(page.items, 250, 100), null); // session column, nothing there yet
+    assert.equal(layoutOf(page).hitTest(page.items, 60, 900), null); // below every row
   });
 
   void test('Escape closes the menu', () => {
@@ -125,8 +127,8 @@ void describe('Hellwave live session list', () => {
     // what layout.draw() prints, which isn't observable through .label, see the file-level
     // comment on the map-fallback test below for why draw-level assertions aren't used here).
     const channel = createMockSessionsChannel([
-      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 2, maxPlayers: 4, settings: { hw_rounds: '12', hw_round_current: '3' } },
-      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} },
+      createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 2, maxPlayers: 4, settings: { hw_rounds: '12', hw_round_current: '3' } }),
+      createMockSession({ sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} }),
     ]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
@@ -144,8 +146,8 @@ void describe('Hellwave live session list', () => {
 
   void test('disables (and does not gray out) sessions with an open slot, and disables ones that are full', () => {
     const channel = createMockSessionsChannel([
-      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 4, maxPlayers: 4, settings: {} },
-      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 3, maxPlayers: 4, settings: {} },
+      createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 4, maxPlayers: 4, settings: {} }),
+      createMockSession({ sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 3, maxPlayers: 4, settings: {} }),
     ]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
@@ -186,7 +188,7 @@ void describe('Hellwave live session list', () => {
   });
 
   void test('joining a session connects and closes the menu once a profile is confirmed', () => {
-    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
+    const channel = createMockSessionsChannel([createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} })]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
@@ -194,27 +196,27 @@ void describe('Hellwave live session list', () => {
 
     engine.Menu.Push('main');
 
-    getMainPage().items[4].action();
+    pressItem(getMainPage(), 4);
 
     assert.deepEqual(engine.appendedConsoleText, ['connect webrtc://abc\n']);
     assert.equal(engine.Menu.IsOpen(), false); // Menu.Close(), same as id1's launch_server join
   });
 
   void test('joining a session opens the profile gate first when unconfirmed, and accepting connects', () => {
-    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
+    const channel = createMockSessionsChannel([createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} })]);
     const { engine, calls, getMainPage, getProfilePage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
 
     engine.Menu.Push('main');
 
-    getMainPage().items[4].action(); // Join -- no profile confirmed yet
+    pressItem(getMainPage(), 4); // Join -- no profile confirmed yet
 
     assert.deepEqual(calls.push, ['main', 'hellwave_profile']);
-    assert.equal(getProfilePage().items.at(-1).label, 'Continue');
+    assert.equal(getProfilePage().items.at(-1)?.label, 'Continue');
     assert.deepEqual(engine.appendedConsoleText, []); // not connected yet
 
-    getProfilePage().items.at(-1).action(); // accept
+    pressItem(getProfilePage(), -1); // accept
 
     assert.deepEqual(engine.appendedConsoleText, ['connect webrtc://abc\n']);
     assert.equal(engine.GetCvar('hw_profile_confirmed').string, '1');
@@ -222,7 +224,7 @@ void describe('Hellwave live session list', () => {
   });
 
   void test('receives live session updates while showing, and stops once the page exits', () => {
-    const channel = createMockSessionsChannel([{ sessionId: 'first', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
+    const channel = createMockSessionsChannel([createMockSession({ sessionId: 'first', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} })]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
@@ -234,7 +236,7 @@ void describe('Hellwave live session list', () => {
 
     // Simulates a live server-added/server-updated diff arriving over the channel -- no timer or
     // fetch involved, just the next push.
-    channel.push([{ sessionId: 'second', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4, settings: {} }]);
+    channel.push([createMockSession({ sessionId: 'second', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 2, maxPlayers: 4, settings: {} })]);
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4] --']);
 
@@ -243,7 +245,7 @@ void describe('Hellwave live session list', () => {
     assert.equal(channel.activeSubscriberCount, 0);
 
     // A push after leaving must not reach this page's now-torn-down listener.
-    channel.push([{ sessionId: 'third', hostname: 'Carol\'s Server', map: 'hw_doom', currentPlayers: 3, maxPlayers: 4, settings: {} }]);
+    channel.push([createMockSession({ sessionId: 'third', hostname: 'Carol\'s Server', map: 'hw_doom', currentPlayers: 3, maxPlayers: 4, settings: {} })]);
 
     assert.deepEqual(getMainPage().items.slice(4).map((item) => item.label), ['Castle of the damned [2/4] --']);
   });
@@ -254,7 +256,7 @@ void describe('Hellwave live session list', () => {
     // gap in NewGameMenu's own map-picture tests) -- so this only covers that an uncurated map
     // name doesn't break row creation, which is what a missing thumbnail cache entry could do if
     // the lookup weren't null-safe. Actual thumbnail draw behavior is manually verified live.
-    const channel = createMockSessionsChannel([{ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'some_future_map', currentPlayers: 1, maxPlayers: 4, settings: {} }]);
+    const channel = createMockSessionsChannel([createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'some_future_map', currentPlayers: 1, maxPlayers: 4, settings: {} })]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
@@ -272,14 +274,14 @@ void describe('Hellwave live session list', () => {
     // file-level comment on the map-fallback test above). This only guards against the slicing
     // logic throwing (e.g. an off-by-one) when fed something far longer than any real hostname;
     // the actual truncated/rendered text is manually verified live.
-    const channel = createMockSessionsChannel([{
+    const channel = createMockSessionsChannel([createMockSession({
       sessionId: 'abc',
       hostname: 'A'.repeat(200),
       map: 'hw_doom',
       currentPlayers: 1,
       maxPlayers: 4,
       settings: {},
-    }]);
+    })]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
     });
@@ -293,8 +295,8 @@ void describe('Hellwave live session list', () => {
 
   void test('layout.hitTest resolves session rows using the taller row spacing, including over the thumbnail', () => {
     const channel = createMockSessionsChannel([
-      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} },
-      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} },
+      createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {} }),
+      createMockSession({ sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {} }),
     ]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },
@@ -306,12 +308,12 @@ void describe('Hellwave live session list', () => {
 
     // Row 0 spans y=[100, 152) -- y=145 is past the old 28-tall sidebar spacing's boundary
     // (100+28=128), proving the session column's row height actually grew.
-    assert.equal(page.layout.hitTest(page.items, 215, 145), 4);
+    assert.equal(layoutOf(page).hitTest(page.items, 215, 145), 4);
     // x=212 is inside the 20-wide thumbnail (SESSIONS_X=210), left of where the label itself
     // starts -- confirms the hit region still covers the thumbnail area.
-    assert.equal(page.layout.hitTest(page.items, 212, 145), 4);
-    assert.equal(page.layout.hitTest(page.items, 215, 155), 5); // row 1, y=[152, 204)
-    assert.equal(page.layout.hitTest(page.items, 215, 300), null); // below every row
+    assert.equal(layoutOf(page).hitTest(page.items, 212, 145), 4);
+    assert.equal(layoutOf(page).hitTest(page.items, 215, 155), 5); // row 1, y=[152, 204)
+    assert.equal(layoutOf(page).hitTest(page.items, 215, 300), null); // below every row
 
     engine.Menu.Pop();
   });
@@ -322,8 +324,8 @@ void describe('Hellwave live session list', () => {
     // rebuildSessionRows's own comment); "still probing" (absent ping) is already covered by every
     // other test in this file via its "--" suffix.
     const channel = createMockSessionsChannel([
-      { sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: 42, pingUnreachable: false },
-      { sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: null, pingUnreachable: true },
+      createMockSession({ sessionId: 'abc', hostname: 'Alice\'s Server', map: 'hw_doom', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: 42, pingUnreachable: false }),
+      createMockSession({ sessionId: 'def', hostname: 'Bob\'s Server', map: 'hw_e1m2', currentPlayers: 1, maxPlayers: 4, settings: {}, ping: null, pingUnreachable: true }),
     ]);
     const { engine, getMainPage } = createMainMenuRig(HellwaveMenu, {
       Multiplayer: { SubscribeSessions: channel.SubscribeSessions },

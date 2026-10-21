@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { serializableFieldsOf } from '../../../../test/support/serialization.ts';
+
 await import('../../id1/GameAPI.ts');
 
 const { channel, clientEvent, formatMoney, fromBuyImpulse, items, toBuyImpulse } = await import('../Defs.ts');
@@ -9,14 +11,28 @@ const hellwavePlayerModule = await import('../entity/Player.ts');
 const { buyMenuItems } = hellwavePlayerModule;
 const HellwavePlayer = hellwavePlayerModule.default;
 
+/** A player that lets a test run the protected steps of a purchase and of the impulse handling. */
+class TestPlayer extends HellwavePlayer {
+  buyMenuPurchase(itemId: keyof typeof buyMenuItems): void {
+    this._buyMenuPurchase(itemId);
+  }
+
+  handleImpulseCommands(): void {
+    this._handleImpulseCommands();
+  }
+}
+
 /**
  * Create a minimal player-shaped stub that can exercise HellwavePlayer methods.
- * @returns {object} Player-like stub.
+ * @returns Player-like stub.
  */
 function createPlayerStub() {
-  const sounds = [];
-  const dispatchedEvents = [];
-  const player = Object.assign(Object.create(HellwavePlayer.prototype), {
+  const sounds: Array<{ soundChannel: number; soundName: string }> = [];
+  const dispatchedEvents: unknown[][] = [];
+  // A real player needs an edict and a whole game; the purchase reads the members below.
+  const player = Object.create(TestPlayer.prototype) as TestPlayer;
+
+  Object.assign(player, {
     money: 500,
     buyzone: 1, // physically inside a buyzone, per the purely server-side check
     ammo_shells: 0,
@@ -29,16 +45,16 @@ function createPlayerStub() {
     game: {
       deathmatch: false,
     },
-    startSound(soundChannel, soundName) {
+    startSound(soundChannel: number, soundName: string) {
       sounds.push({ soundChannel, soundName });
     },
-    dispatchEvent(eventType, ...args) {
+    dispatchEvent(eventType: number, ...args: unknown[]) {
       dispatchedEvents.push([eventType, ...args]);
     },
-    centerPrint(message) {
+    centerPrint(message: string) {
       assert.fail(`Unexpected centerPrint: ${message}`);
     },
-    consolePrint(message) {
+    consolePrint(message: string) {
       assert.fail(`Unexpected consolePrint: ${message}`);
     },
     setWeapon() {
@@ -51,16 +67,18 @@ function createPlayerStub() {
 
 void describe('HellwavePlayer', () => {
   void test('serializableFields is a frozen array from @entity', () => {
-    assert.ok(Array.isArray(HellwavePlayer.serializableFields));
-    assert.ok(Object.isFrozen(HellwavePlayer.serializableFields));
-    assert.deepEqual(HellwavePlayer.serializableFields, ['money', 'buyzone', 'buyzone_time', 'spectating']);
+    const fields = serializableFieldsOf(HellwavePlayer);
+
+    assert.ok(Array.isArray(fields));
+    assert.ok(Object.isFrozen(fields));
+    assert.deepEqual(fields, ['money', 'buyzone', 'buyzone_time', 'spectating']);
     assert.equal(buyMenuItems[2].cost, 200);
   });
 
   void test('buys shell bundles through the buy menu and dispatches a money update plus purchase feedback', () => {
     const { player, sounds, dispatchedEvents } = createPlayerStub();
 
-    player._buyMenuPurchase(2);
+    player.buyMenuPurchase(2);
 
     assert.equal(player.money, 300);
     assert.equal(player.ammo_shells, 20);
@@ -76,7 +94,7 @@ void describe('HellwavePlayer', () => {
     const { player, dispatchedEvents } = createPlayerStub();
     player.money = 0;
 
-    player._buyMenuPurchase(2);
+    player.buyMenuPurchase(2);
 
     assert.equal(player.money, 0);
     assert.deepEqual(dispatchedEvents, [
@@ -88,7 +106,7 @@ void describe('HellwavePlayer', () => {
     const { player, dispatchedEvents } = createPlayerStub();
     player.armorvalue = 200; // item 1 (Heavy Armor) is only available below 200
 
-    player._buyMenuPurchase(1);
+    player.buyMenuPurchase(1);
 
     assert.equal(player.money, 500);
     assert.deepEqual(dispatchedEvents, [
@@ -100,7 +118,7 @@ void describe('HellwavePlayer', () => {
     const { player, dispatchedEvents } = createPlayerStub();
     player.buyzone = 0;
 
-    player._buyMenuPurchase(2);
+    player.buyMenuPurchase(2);
 
     assert.equal(player.money, 500);
     assert.deepEqual(dispatchedEvents, [
@@ -112,7 +130,7 @@ void describe('HellwavePlayer', () => {
     const { player, dispatchedEvents } = createPlayerStub();
     player.impulse = toBuyImpulse(2);
 
-    player._handleImpulseCommands();
+    player.handleImpulseCommands();
 
     assert.equal(player.impulse, 0);
     assert.equal(player.money, 300);

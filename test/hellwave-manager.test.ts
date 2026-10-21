@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { EventBus, type ServerGameEventMap } from '../../../engine/common/EventBus.ts';
+import { createInertModGameApi, createMutableEngineApi } from '../../../../test/support/entityMocks.ts';
+import { serializableFieldsOf } from '../../../../test/support/serialization.ts';
+import type { HellwaveServerEvents } from '../Events.ts';
+import type { ServerGameAPI as HellwaveGame } from '../GameAPI.ts';
+
 await import('../../id1/GameAPI.ts');
 
 const { phases } = await import('../Phases.ts');
@@ -10,40 +16,37 @@ const hellwavePlayerModule = await import('../entity/Player.ts');
 const GameManager = hellwaveGameManagerModule.default;
 const HellwavePlayer = hellwavePlayerModule.default;
 
-/**
- * Create an event bus with subscribe and publish support.
- * @returns {object} Mock event bus.
- */
-function createEventBus() {
-  const listeners = new Map();
+type ServerEventMap = ServerGameEventMap & HellwaveServerEvents;
 
-  return {
-    subscribe(eventName, handler) {
-      const handlers = listeners.get(eventName) ?? [];
-      handlers.push(handler);
-      listeners.set(eventName, handlers);
+/** The manager with the step of a round that a test runs on its own. */
+class TestManager extends GameManager {
+  runNextRound(): void {
+    this.startNextRound();
+  }
+}
 
-      return () => {
-        const currentHandlers = listeners.get(eventName) ?? [];
-        listeners.set(eventName, currentHandlers.filter((currentHandler) => currentHandler !== handler));
-      };
-    },
+/** An event bus that delivers and remembers everything that was published on it. */
+class RecordingEventBus extends EventBus<ServerEventMap> {
+  readonly published: unknown[][] = [];
 
-    publish(eventName, ...args) {
-      for (const handler of listeners.get(eventName) ?? []) {
-        handler(...args);
-      }
-    },
-  };
+  override publish<Name extends Extract<keyof ServerEventMap, string>>(eventName: Name, ...args: ServerEventMap[Name]): void {
+    this.published.push([eventName, ...args]);
+    super.publish(eventName, ...args);
+  }
+}
+
+interface MockGameOverrides {
+  readonly engine?: object;
+  readonly startIntermission?: () => void;
 }
 
 /**
  * Create a plain player-shaped test stub.
- * @param {object} overrides Optional player overrides.
- * @returns {object} Player-like stub.
+ * @param overrides Optional player overrides.
+ * @returns Player-like stub.
  */
-function createPlayerStub(overrides = {}) {
-  return Object.assign(Object.create(HellwavePlayer.prototype), {
+function createPlayerStub(overrides: object = {}): InstanceType<typeof HellwavePlayer> {
+  return Object.assign(Object.create(HellwavePlayer.prototype) as InstanceType<typeof HellwavePlayer>, {
     spectating: false,
     health: 100,
     putPlayerInServer() {
@@ -53,33 +56,26 @@ function createPlayerStub(overrides = {}) {
 
 /**
  * Create the minimal Hellwave game API surface used by the manager tests.
- * @param {object} overrides Optional overrides.
- * @returns {object} Mock game plus captured engine side effects.
+ * @param overrides Optional overrides.
+ * @returns Mock game plus captured engine side effects.
  */
-function createMockGame(overrides = {}) {
+function createMockGame(overrides: MockGameOverrides = {}) {
   const { engine: engineOverrides = {}, ...gameOverrides } = overrides;
-  const eventBus = createEventBus();
-  const published = [];
-  const consolePrints = [];
-  const broadcastPrints = [];
-  const playTracks = [];
-  const setCvars = [];
+  const eventBus = new RecordingEventBus('test');
+  const consolePrints: string[] = [];
+  const broadcastPrints: string[] = [];
+  const playTracks: number[] = [];
+  const setCvars: Array<[string, string]> = [];
 
-  const engine = {
-    eventBus: {
-      subscribe: eventBus.subscribe,
-      publish(eventName, ...args) {
-        published.push([eventName, ...args]);
-        eventBus.publish(eventName, ...args);
-      },
-    },
-    BroadcastPrint(message) {
+  const engine = createMutableEngineApi({
+    eventBus,
+    BroadcastPrint(message: string): void {
       broadcastPrints.push(message);
     },
-    ConsolePrint(message) {
+    ConsolePrint(message: string): void {
       consolePrints.push(message);
     },
-    PlayTrack(trackNumber) {
+    PlayTrack(trackNumber: number): void {
       playTracks.push(trackNumber);
     },
     FindAllByFilter() {
@@ -90,14 +86,13 @@ function createMockGame(overrides = {}) {
     },
     ChangeLevel() {
     },
-    SetCvar(name, value) {
+    SetCvar(name: string, value: string): void {
       setCvars.push([name, value]);
     },
     ...engineOverrides,
-  };
+  });
 
-  const game = {
-    engine,
+  const game = createInertModGameApi<HellwaveGame>({
     time: 10,
     quiettime: 15,
     normaltime: 90,
@@ -119,11 +114,11 @@ function createMockGame(overrides = {}) {
     loadNextMap() {
     },
     ...gameOverrides,
-  };
+  }, engine);
 
   return {
     game,
-    published,
+    published: eventBus.published,
     consolePrints,
     broadcastPrints,
     playTracks,
@@ -134,11 +129,13 @@ function createMockGame(overrides = {}) {
 void describe('GameManager', () => {
   void test('declares the expected serializable runtime fields', () => {
     const { game } = createMockGame();
-    const manager = new GameManager(game);
+    const manager = new TestManager(game);
 
-    assert.ok(Array.isArray(GameManager.serializableFields));
-    assert.ok(Object.isFrozen(GameManager.serializableFields));
-    assert.deepEqual(GameManager.serializableFields, [
+    const fields = serializableFieldsOf(GameManager);
+
+    assert.ok(Array.isArray(fields));
+    assert.ok(Object.isFrozen(fields));
+    assert.deepEqual(fields, [
       'spawnpoints',
       'spawn_next',
       'phase',
@@ -190,10 +187,10 @@ void describe('GameManager', () => {
         },
       },
     });
-    const manager = new GameManager(game);
+    const manager = new TestManager(game);
 
     manager.round_number_limit = 4;
-    manager.startNextRound();
+    manager.runNextRound();
 
     assert.equal(manager.round_number, 1);
     assert.equal(manager.round_monsters_limit, 20);
@@ -216,12 +213,12 @@ void describe('GameManager', () => {
 
   void test('mirrors each subsequent round number into hw_round_current', () => {
     const { game, setCvars } = createMockGame();
-    const manager = new GameManager(game);
+    const manager = new TestManager(game);
 
     manager.round_number_limit = 4;
-    manager.startNextRound();
-    manager.startNextRound();
-    manager.startNextRound();
+    manager.runNextRound();
+    manager.runNextRound();
+    manager.runNextRound();
 
     assert.deepEqual(setCvars, [
       ['hw_round_current', '1'],
@@ -237,12 +234,12 @@ void describe('GameManager', () => {
         intermissionCalls += 1;
       },
     });
-    const manager = new GameManager(game);
+    const manager = new TestManager(game);
 
     manager.round_number = 3;
     manager.round_number_limit = 3;
 
-    manager.startNextRound();
+    manager.runNextRound();
 
     assert.equal(intermissionCalls, 1);
     assert.equal(manager.phase, phases.victory);
