@@ -14,6 +14,7 @@ import { HellwaveSuperspike, WeaponShotgun } from './entity/Weapons.ts';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.ts';
 import GameManager from './GameManager.ts';
 import HellwaveStats from './helper/HellwaveStats.ts';
+import { HellwaveYellowLargeFlameLightEntity, HellwaveYellowSmallFlameLightEntity } from './entity/Misc.ts';
 import { HellwaveBossMonsterEntity, HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
 
 interface HellwaveCvarMap extends Record<keyof typeof id1ServerGameAPI._cvars, Cvar | null> {
@@ -50,6 +51,8 @@ const entityClasses = [
   HellwaveBossMonsterEntity,
   HellwaveBossMonsterSpawnMarker,
   WeaponShotgun,
+  HellwaveYellowLargeFlameLightEntity,
+  HellwaveYellowSmallFlameLightEntity,
 ] satisfies readonly EntityClass[];
 
 @serializableObject
