@@ -24,7 +24,7 @@ import HellwavePlayer from './entity/Player.ts';
 import { BuyZoneEntity } from './entity/Zones.ts';
 import { phases, type HellwavePhase } from './Phases.ts';
 import { HellwaveBossMonsterSpawnMarker } from './entity/BossMonsters.ts';
-import { HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
+import { HellwaveZombieMonsterEntity, orderHuntAfterSpawn } from './entity/Monsters.ts';
 import TarbabyMonsterEntity from '../id1/entity/monster/Tarbaby.ts';
 import DemonMonster from '../id1/entity/monster/Demon.ts';
 import { serverEvents } from './Events.ts';
@@ -565,6 +565,7 @@ export default class GameManager {
 
     if (goalentity !== null) {
       enemy.hunt(goalentity);
+      orderHuntAfterSpawn(enemy); // the first think of the monster undoes the order above
     }
   }
 

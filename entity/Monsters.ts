@@ -7,7 +7,31 @@ import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.t
 import { hull } from '../Defs.ts';
 import type BaseEntity from '../../id1/entity/BaseEntity.ts';
 import { ArmySoldierMonster } from '../../id1/entity/monster/Soldier.ts';
+import type BaseMonster from '../../id1/entity/monster/BaseMonster.ts';
 import { WeaponShotgun } from './Weapons.ts';
+
+/**
+ * How long after a spawn a monster is certain to have had its first think, in which the AI sets the monster up and puts it at
+ * rest (stand state, `pausetime` forever). The first think comes within 0.6 seconds.
+ */
+const FIRST_THINK_DONE_DELAY = 1.0;
+
+/**
+ * Sends a monster that was spawned with an enemy after that enemy, for good. `hunt()` right after the spawn is not enough: the
+ * first think of a monster undoes it, and since it already has the player as its enemy it never looks for him again. So the order
+ * is given once more when the first think is certainly over. It is a scheduled think of the monster, so it survives a savegame
+ * (and, being serialized as source, it names nothing but `this`).
+ * @param monster A freshly spawned monster that has its enemy set.
+ */
+export function orderHuntAfterSpawn(monster: BaseMonster): void {
+  monster._scheduleThink(monster.game.time + FIRST_THINK_DONE_DELAY, function (this: BaseMonster): void {
+    const target = this.enemy;
+
+    if (this.health > 0 && target !== null && target.classname === 'player') {
+      this.hunt(target);
+    }
+  }, 'hellwave-hunt');
+}
 
 @serializableObject
 export class HellwaveDogMonsterEntity extends DogMonsterEntity {
