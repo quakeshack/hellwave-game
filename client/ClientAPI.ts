@@ -6,6 +6,7 @@ import type Vector from '../../../shared/Vector.ts';
 import { ClientGameAPI as Id1ClientGameAPI, type Id1Clientdata } from '../../id1/client/ClientAPI.ts';
 import type { Id1MenuOptions } from '../../id1/client/Menu.ts';
 import { clientEvent, clientEventName } from '../Defs.ts';
+import { ServerGameAPI } from '../GameAPI.ts';
 import { MAP_CATALOG } from './MapCatalog.ts';
 
 import HellwaveHUD from './HUD.ts';
@@ -68,6 +69,9 @@ class StartGameHandler implements StartGameInterface {
 }
 
 export class ClientGameAPI extends Id1ClientGameAPI {
+  /** The client handlers of the game, which the server precaches for. */
+  static override _clientEdictHandlerRegistry = ServerGameAPI._clientEdictHandlerRegistry;
+
   /** Current player data mirrored from the server. */
   override clientdata: HellwaveClientdata = {
     health: 100,

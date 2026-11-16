@@ -4,6 +4,7 @@ import { cvarFlags } from '../../shared/Defs.ts';
 import { entityClasses as id1EntityClasses, ServerGameAPI as id1ServerGameAPI } from '../id1/GameAPI.ts';
 import { featureFlags } from '../id1/featureFlags.ts';
 import type { EntityClass } from '../id1/entity/BaseEntity.ts';
+import ClientEdictHandlerRegistry from '../id1/helper/ClientEdictHandlerRegistry.ts';
 import EntityRegistry from '../id1/helper/Registry.ts';
 import { serializableObject, serializable } from '../id1/helper/MiscHelpers.ts';
 import { HellwaveBackpackEntity, HellwaveHealthItemEntity } from './entity/Items.ts';
@@ -13,6 +14,7 @@ import HellwavePlayer from './entity/Player.ts';
 import { WallEntity } from './entity/Props.ts';
 import { HellwaveSuperspike, WeaponShotgun } from './entity/Weapons.ts';
 import { BuyZoneEntity, BuyZoneShuttersEntity, MonstersSpawnZoneEntity, PlayersSpawnZoneEntity } from './entity/Zones.ts';
+import { clientEdictHandlerClasses } from './client/entity/ClientEdictHandlers.ts';
 import GameManager from './GameManager.ts';
 import HellwaveStats from './helper/HellwaveStats.ts';
 import { HellwaveYellowLargeFlameLightEntity, HellwaveYellowSmallFlameLightEntity } from './entity/Misc.ts';
@@ -60,6 +62,9 @@ const entityClasses = [
 @serializableObject
 class HellwaveServerGameAPI extends id1ServerGameAPI {
   static _entityRegistry = new EntityRegistry(entityClasses);
+
+  /** id1's client handlers, with the player's that also makes the muzzle flash sprite. */
+  static override _clientEdictHandlerRegistry = new ClientEdictHandlerRegistry(clientEdictHandlerClasses);
 
   static _cvars: HellwaveCvarMap = {
     ...id1ServerGameAPI._cvars,
