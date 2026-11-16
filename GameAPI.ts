@@ -8,6 +8,7 @@ import EntityRegistry from '../id1/helper/Registry.ts';
 import { serializableObject, serializable } from '../id1/helper/MiscHelpers.ts';
 import { HellwaveBackpackEntity, HellwaveHealthItemEntity } from './entity/Items.ts';
 import { HellwaveDogMonsterEntity, HellwaveSoldierMonsterEntity, HellwaveZombieMonsterEntity } from './entity/Monsters.ts';
+import { HeldWeaponEntity } from './entity/HeldWeapons.ts';
 import HellwavePlayer from './entity/Player.ts';
 import { WallEntity } from './entity/Props.ts';
 import { HellwaveSuperspike, WeaponShotgun } from './entity/Weapons.ts';
@@ -37,6 +38,7 @@ featureFlags.push(
 const entityClasses = [
   ...id1EntityClasses,
   HellwavePlayer,
+  HeldWeaponEntity,
   HellwaveBackpackEntity,
   HellwaveHealthItemEntity,
   HellwaveDogMonsterEntity,

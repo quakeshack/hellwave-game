@@ -71,7 +71,7 @@ void describe('HellwavePlayer', () => {
 
     assert.ok(Array.isArray(fields));
     assert.ok(Object.isFrozen(fields));
-    assert.deepEqual(fields, ['money', 'buyzone', 'buyzone_time', 'spectating']);
+    assert.deepEqual(fields, ['money', 'buyzone', 'buyzone_time', 'spectating', '_heldGun', '_heldAxe', '_lastGun']);
     assert.equal(buyMenuItems[2].cost, 200);
   });
 

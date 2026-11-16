@@ -1,15 +1,18 @@
 import type { ServerGameAPI } from '../GameAPI.ts';
+import type { ServerEngineAPI } from '../../../shared/GameInterfaces.ts';
 
 import Vector from '../../../shared/Vector.ts';
 
 import { serializableObject, serializable } from '../../id1/helper/MiscHelpers.ts';
 import { HealthItemEntity, HeavyArmorEntity, WeaponGrenadeLauncher, WeaponNailgun, WeaponRocketLauncher, WeaponSuperNailgun, WeaponSuperShotgun, WeaponThunderbolt } from '../../id1/entity/Items.ts';
 import { PlayerEntity } from '../../id1/entity/Player.ts';
-import { Backpack, type BackpackPickup } from '../../id1/entity/Weapons.ts';
+import { Backpack, type BackpackPickup, type WeaponConfigKey } from '../../id1/entity/Weapons.ts';
+import type BaseEntity from '../../id1/entity/BaseEntity.ts';
 
-import { channel, clientEvent, flags, formatMoney, fromBuyImpulse, items, moveType, solid } from '../Defs.ts';
+import { channel, clientEvent, dead, flags, formatMoney, fromBuyImpulse, items, moveType, solid } from '../Defs.ts';
 import { phases } from '../Phases.ts';
 
+import { AXE_TAG, GUN_TAG, HeldWeaponEntity } from './HeldWeapons.ts';
 import { HellwaveBackpackEntity } from './Items.ts';
 
 type BuyMenuItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -116,6 +119,17 @@ export default class HellwavePlayer extends PlayerEntity {
   @serializable buyzone_time = 0;
   @serializable spectating = false;
 
+  /** The gun other players see in this player's hand, or on the back while the axe is out. */
+  @serializable protected _heldGun: HeldWeaponEntity | null = null;
+
+  /** The axe, drawn only while it is the weapon in use. */
+  @serializable protected _heldAxe: HeldWeaponEntity | null = null;
+
+  /** The last weapon that was not the axe: the gun the model keeps on the back. */
+  @serializable protected _lastGun: WeaponConfigKey | 0 = 0;
+
+  static override _modelPlayer = 'progs/player.iqm';
+
   static override clientEntityFields = [
     ...PlayerEntity.clientEntityFields,
     'money',
@@ -136,6 +150,48 @@ export default class HellwavePlayer extends PlayerEntity {
     ammo_rockets: 200,
     ammo_cells: 600,
   };
+
+  static override _precache(engineAPI: ServerEngineAPI): void {
+    super._precache(engineAPI);
+
+    for (const model of HeldWeaponEntity.models) {
+      engineAPI.PrecacheModel(model);
+    }
+  }
+
+  override setWeapon(weapon: WeaponConfigKey | 0 = this.weapon): void {
+    super.setWeapon(weapon);
+
+    if (this.weapon !== 0 && this.weapon !== items.IT_AXE) {
+      this._lastGun = this.weapon;
+    }
+
+    this._syncHeldWeapons();
+  }
+
+  /**
+   * Makes the weapons the player carries match the weapon in use: the last gun always, on the back while the axe is out, and the axe only
+   * while it is. Nothing is carried by a player who is dead, spectating or invisible (the eyes model has no tags). Cheap and idempotent, so
+   * it can run whenever something about the player changed, and every frame.
+   */
+  protected _syncHeldWeapons(): void {
+    if (this.edict === null) {
+      return;
+    }
+
+    const carrying = !this.spectating && this.deadflag === dead.DEAD_NO && (this.items & items.IT_INVISIBILITY) === 0;
+    const gunModel = carrying ? HeldWeaponEntity.modelOf(this._lastGun) : null;
+    const axeModel = carrying ? HeldWeaponEntity.modelOf(items.IT_AXE) : null;
+
+    this._heldGun = HeldWeaponEntity.update(this as BaseEntity, this._heldGun, gunModel, GUN_TAG, true);
+    this._heldAxe = HeldWeaponEntity.update(this as BaseEntity, this._heldAxe, axeModel, AXE_TAG, this.weapon === items.IT_AXE);
+  }
+
+  override thinkDie(attackerEntity: BaseEntity): void {
+    super.thinkDie(attackerEntity);
+
+    this._syncHeldWeapons(); // a corpse, and a pile of gibs, hold nothing
+  }
 
   protected override _respawn(): void {
     switch ((this.game as ServerGameAPI).manager.phase) {
@@ -186,6 +242,7 @@ export default class HellwavePlayer extends PlayerEntity {
 
     this.weapon = 0;
     this.spectating = true;
+    this._syncHeldWeapons();
   }
 
   protected _unspectate(): void {
@@ -194,6 +251,7 @@ export default class HellwavePlayer extends PlayerEntity {
     this.clear();
 
     this.spectating = false;
+    this._syncHeldWeapons();
   }
 
   protected override _dropBackpack(): void {
@@ -287,6 +345,11 @@ export default class HellwavePlayer extends PlayerEntity {
   }
 
   override disconnected(): void {
+    this._heldGun?.remove();
+    this._heldAxe?.remove();
+    this._heldGun = null;
+    this._heldAxe = null;
+
     if (!this.spectating) {
       super.disconnected();
       return;
@@ -403,6 +466,8 @@ export default class HellwavePlayer extends PlayerEntity {
 
   override playerPostThink(): void {
     super.playerPostThink();
+
+    this._syncHeldWeapons();
 
     if ((this.game as ServerGameAPI).manager.phase !== phases.quiet) {
       this.buyzone = -1;
