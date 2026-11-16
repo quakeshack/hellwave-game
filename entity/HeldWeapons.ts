@@ -1,8 +1,8 @@
 import BaseEntity from '../../id1/entity/BaseEntity.ts';
-import { serializableObject } from '../../id1/helper/MiscHelpers.ts';
+import { serializable, serializableObject } from '../../id1/helper/MiscHelpers.ts';
 import { weaponConfig, type WeaponConfigKey } from '../../id1/entity/Weapons.ts';
 
-import { effect, items, moveType, solid } from '../Defs.ts';
+import { items, moveType, solid } from '../Defs.ts';
 
 /**
  * The model other players see in a player's hand for each weapon (`progs/p_*.iqm`, built by `progs/src/build-models.sh` in the
@@ -30,20 +30,26 @@ for (const [weapon, playerModel] of heldWeaponModels) {
   }
 }
 
-/** Where the gun hangs on the player model: the hand, or the back while the axe is out. */
+/** Where the gun is held on the player model: the hand, or the back while the axe is out. */
 export const GUN_TAG = 'tag_weapon';
 
-/** Where the axe hangs on the player model. */
+/** Where the axe is held on the player model. */
 export const AXE_TAG = 'tag_axe';
+
+/** Where the axe is carried while a gun is in the hand: a holster on the back, which the player model has as a tag of its own. */
+export const AXE_HOLSTER_TAG = 'tag_axe_back';
 
 /**
  * A weapon a player carries, drawn on a tag of the player's model. The player owns it: it is made when the player first carries
- * a weapon, changes its model when the weapon changes, hides while it is not in use, and goes when the player cannot carry it
- * (dead, spectating, gone).
+ * a weapon, changes its model when the weapon changes, moves between tags (the axe, from the hand to the back), and goes when the
+ * player cannot carry it (dead, spectating, gone).
  */
 @serializableObject
 export class HeldWeaponEntity extends BaseEntity {
   static classname = 'hellwave_heldweapon';
+
+  /** The tag of the holder's model it is attached to now. */
+  @serializable tagName = '';
 
   /**
    * @returns The models that have to be precached for players to hold weapons.
@@ -61,15 +67,14 @@ export class HeldWeaponEntity extends BaseEntity {
   }
 
   /**
-   * Makes `slot` show what a player should be holding there, spawning, changing, hiding or freeing it.
+   * Makes `slot` show what a player should be holding there, spawning, changing, moving or freeing it.
    * @param holder The player.
    * @param slot What the player holds there now, `null` for nothing.
    * @param model The weapon model, `null` when the slot should not exist.
    * @param tag The tag of the holder's model it hangs on.
-   * @param visible Whether it is drawn. A hidden one stays attached, so showing it again costs nothing.
    * @returns What the slot is now, to keep.
    */
-  static update(holder: BaseEntity, slot: HeldWeaponEntity | null, model: string | null, tag: string, visible: boolean): HeldWeaponEntity | null {
+  static update(holder: BaseEntity, slot: HeldWeaponEntity | null, model: string | null, tag: string): HeldWeaponEntity | null {
     if (model === null) {
       slot?.remove();
       return null;
@@ -85,12 +90,14 @@ export class HeldWeaponEntity extends BaseEntity {
       }
 
       held.setModel(model, false);
-      held.edict!.setAttachment(holder.edict!, tag);
     } else if (held.model !== model) {
       held.setModel(model, false);
     }
 
-    held.effects = visible ? held.effects & ~effect.EF_NODRAW : held.effects | effect.EF_NODRAW;
+    if (held.tagName !== tag) {
+      held.edict!.setAttachment(holder.edict!, tag);
+      held.tagName = tag;
+    }
 
     return held;
   }

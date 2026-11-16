@@ -7,7 +7,7 @@ import type { dead as DeadFlag } from '../Defs.ts';
 
 await import('../../id1/GameAPI.ts');
 
-const { dead, effect, items } = await import('../Defs.ts');
+const { dead, items } = await import('../Defs.ts');
 const { weaponConfig } = await import('../../id1/entity/Weapons.ts');
 const { HeldWeaponEntity } = await import('../entity/HeldWeapons.ts');
 const hellwavePlayerModule = await import('../entity/Player.ts');
@@ -63,7 +63,7 @@ function createCarrier(state: { weapon?: number; lastGun?: number; spectating?: 
         // A real held weapon needs an edict of an engine; the code under test reads and writes the members below.
         held: standIn(HeldWeaponEntity.prototype, {
           model: null as string | null,
-          effects: 0,
+          tagName: '',
           edict: { isFree: () => false, setAttachment: (parent: unknown, tag: string | null) => attachments.push([parent, tag]) },
           setModel(model: string | null) {
             this.model = model;
@@ -99,15 +99,6 @@ function createCarrier(state: { weapon?: number; lastGun?: number; spectating?: 
 /**
  *
  */
-/**
- * @param held A held weapon.
- * @returns Whether it is drawn.
- */
-function isDrawn(held: HeldWeapon | null): boolean {
-  assert.ok(held);
-  return (held.effects & effect.EF_NODRAW) === 0;
-}
-
 void describe('held weapons', () => {
   void test('the weapon table has a model for every weapon, and it is the table id1 reads', () => {
     const weapons: WeaponConfigKey[] = [items.IT_AXE, items.IT_SHOTGUN, items.IT_SUPER_SHOTGUN, items.IT_NAILGUN, items.IT_SUPER_NAILGUN, items.IT_GRENADE_LAUNCHER, items.IT_ROCKET_LAUNCHER, items.IT_LIGHTNING];
@@ -119,7 +110,7 @@ void describe('held weapons', () => {
     }
   });
 
-  void test('with the axe out the gun hangs on the back and the axe is in the hand', () => {
+  void test('with the axe out the axe is in the hand and the gun is the one on the back', () => {
     const { player, records, holderEdict } = createCarrier({ weapon: items.IT_AXE, lastGun: items.IT_SHOTGUN });
 
     player.syncHeldWeapons();
@@ -129,36 +120,34 @@ void describe('held weapons', () => {
     assert.equal(player.axe?.model, weaponConfig.get(items.IT_AXE)?.playerModel);
     assert.deepEqual(records[0]!.attachments, [[holderEdict, 'tag_weapon']]);
     assert.deepEqual(records[1]!.attachments, [[holderEdict, 'tag_axe']]);
-    assert.ok(isDrawn(player.gun));
-    assert.ok(isDrawn(player.axe));
   });
 
-  void test('switching to a gun hides the axe and keeps the same entities', () => {
-    const { player, records } = createCarrier({ weapon: items.IT_AXE });
+  void test('with a gun in the hand the axe is in its holster on the back, not hidden', () => {
+    const { player, records, holderEdict } = createCarrier({ weapon: items.IT_SHOTGUN });
+
+    player.syncHeldWeapons();
+
+    assert.equal(player.axe?.model, weaponConfig.get(items.IT_AXE)?.playerModel);
+    assert.deepEqual(records[1]!.attachments, [[holderEdict, 'tag_axe_back']]);
+    assert.equal(player.axe?.effects ?? 0, 0, 'drawn');
+  });
+
+  void test('switching between the axe and a gun moves the same axe between the hand and the back, and nothing is spawned again', () => {
+    const { player, records, holderEdict } = createCarrier({ weapon: items.IT_AXE });
     player.syncHeldWeapons();
 
     Object.assign(player, { weapon: items.IT_NAILGUN, _lastGun: items.IT_NAILGUN });
     player.syncHeldWeapons();
 
-    assert.equal(records.length, 2); // nothing was spawned again
     assert.equal(player.gun?.model, weaponConfig.get(items.IT_NAILGUN)?.playerModel);
-    assert.ok(isDrawn(player.gun));
-    assert.ok(!isDrawn(player.axe));
-    assert.ok(records.every((record) => !record.removed));
-  });
-
-  void test('going back to the axe shows it again without spawning, and the gun stays on the back', () => {
-    const { player, records } = createCarrier({ weapon: items.IT_SHOTGUN });
-    player.syncHeldWeapons();
-    assert.ok(!isDrawn(player.axe));
+    assert.deepEqual(records[1]!.attachments, [[holderEdict, 'tag_axe'], [holderEdict, 'tag_axe_back']]);
 
     Object.assign(player, { weapon: items.IT_AXE });
     player.syncHeldWeapons();
 
+    assert.deepEqual(records[1]!.attachments, [[holderEdict, 'tag_axe'], [holderEdict, 'tag_axe_back'], [holderEdict, 'tag_axe']]);
     assert.equal(records.length, 2);
-    assert.ok(isDrawn(player.axe));
-    assert.ok(isDrawn(player.gun));
-    assert.equal(player.gun?.model, weaponConfig.get(items.IT_SHOTGUN)?.playerModel);
+    assert.ok(records.every((record) => !record.removed));
   });
 
   void test('a player who never had a gun carries no gun, only the axe', () => {

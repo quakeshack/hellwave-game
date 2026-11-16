@@ -12,7 +12,7 @@ import type BaseEntity from '../../id1/entity/BaseEntity.ts';
 import { channel, clientEvent, dead, flags, formatMoney, fromBuyImpulse, items, moveType, solid } from '../Defs.ts';
 import { phases } from '../Phases.ts';
 
-import { AXE_TAG, GUN_TAG, HeldWeaponEntity } from './HeldWeapons.ts';
+import { AXE_HOLSTER_TAG, AXE_TAG, GUN_TAG, HeldWeaponEntity } from './HeldWeapons.ts';
 import { HellwaveBackpackEntity } from './Items.ts';
 
 type BuyMenuItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -122,7 +122,7 @@ export default class HellwavePlayer extends PlayerEntity {
   /** The gun other players see in this player's hand, or on the back while the axe is out. */
   @serializable protected _heldGun: HeldWeaponEntity | null = null;
 
-  /** The axe, drawn only while it is the weapon in use. */
+  /** The axe: in the hand while it is the weapon in use, in its holster on the back while a gun is. */
   @serializable protected _heldAxe: HeldWeaponEntity | null = null;
 
   /** The last weapon that was not the axe: the gun the model keeps on the back. */
@@ -170,8 +170,8 @@ export default class HellwavePlayer extends PlayerEntity {
   }
 
   /**
-   * Makes the weapons the player carries match the weapon in use: the last gun always, on the back while the axe is out, and the axe only
-   * while it is. Nothing is carried by a player who is dead, spectating or invisible (the eyes model has no tags). Cheap and idempotent, so
+   * Makes the weapons the player carries match the weapon in use: the last gun always, in the hand or, while the axe is out, on the back
+   * (the animation takes care of that), and the axe always, in the hand or, while a gun is out, in its holster on the back. Nothing is carried by a player who is dead, spectating or invisible (the eyes model has no tags). Cheap and idempotent, so
    * it can run whenever something about the player changed, and every frame.
    */
   protected _syncHeldWeapons(): void {
@@ -183,8 +183,8 @@ export default class HellwavePlayer extends PlayerEntity {
     const gunModel = carrying ? HeldWeaponEntity.modelOf(this._lastGun) : null;
     const axeModel = carrying ? HeldWeaponEntity.modelOf(items.IT_AXE) : null;
 
-    this._heldGun = HeldWeaponEntity.update(this as BaseEntity, this._heldGun, gunModel, GUN_TAG, true);
-    this._heldAxe = HeldWeaponEntity.update(this as BaseEntity, this._heldAxe, axeModel, AXE_TAG, this.weapon === items.IT_AXE);
+    this._heldGun = HeldWeaponEntity.update(this as BaseEntity, this._heldGun, gunModel, GUN_TAG);
+    this._heldAxe = HeldWeaponEntity.update(this as BaseEntity, this._heldAxe, axeModel, this.weapon === items.IT_AXE ? AXE_TAG : AXE_HOLSTER_TAG);
   }
 
   override thinkDie(attackerEntity: BaseEntity): void {
